@@ -240,6 +240,17 @@ table.adt tbody tr:hover{background:var(--stripe)}
 .pm-check   {background:#fff7ed;color:#9a3412;border:1px solid #fdba74}
 .pm-transfer{background:#eff6ff;color:#1e40af;border:1px solid #93c5fd}
 .check-indicator{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;background:#fff7ed;color:#9a3412;border:1.5px solid #fdba74;border-radius:8px;padding:4px 10px;margin-left:6px;vertical-align:middle}
+
+/* ═══ PASSWORD MODAL ═══ */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(10,20,50,.45);z-index:200;align-items:center;justify-content:center;padding:1rem}
+.modal-backdrop.on{display:flex}
+.modal{background:#fff;border-radius:14px;padding:2rem;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(10,30,60,.25);position:relative}
+.modal-title{font-size:17px;font-weight:600;margin-bottom:.35rem}
+.modal-sub{font-size:13px;color:var(--ts);margin-bottom:1.5rem}
+.modal-close{position:absolute;top:14px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--th);line-height:1}
+.modal-close:hover{color:var(--text)}
+.uchip{cursor:pointer;transition:background .15s}
+.uchip:hover{background:rgba(255,255,255,.22)!important}
 </style>
 </head>
 <body>
@@ -301,7 +312,7 @@ table.adt tbody tr:hover{background:var(--stripe)}
       </div>
     </div>
     <div class="tr">
-      <div class="uchip">
+      <div class="uchip" onclick="openPwModal()" title="Click to change password">
         <div class="uav" id="uAv">-</div>
         <div class="uname" id="uName">-</div>
         <span class="abadge" id="aBadge" style="display:none">ADMIN</span>
@@ -483,6 +494,21 @@ table.adt tbody tr:hover{background:var(--stripe)}
   </div>
 </div>
 
+<!-- ═══════ PASSWORD MODAL ═══════ -->
+<div class="modal-backdrop" id="pwModal" onclick="closePwModalBg(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closePwModal()">✕</button>
+    <div class="modal-title">Change Password</div>
+    <div class="modal-sub">Signed in as <strong id="pwModalUser"></strong></div>
+    <div class="f"><label>Current Password</label><input type="password" id="pwOld" placeholder="Enter current password" /></div>
+    <div class="f"><label>New Password</label><input type="password" id="pwNew" placeholder="At least 6 characters" /></div>
+    <div class="f" style="margin-bottom:0"><label>Confirm New Password</label><input type="password" id="pwNew2" placeholder="Re-enter new password" /></div>
+    <div class="emsg" id="pwErr"></div>
+    <div id="pwOk" style="font-size:12px;color:var(--ok);margin-top:8px;display:none;background:var(--ok-bg);padding:8px 10px;border-radius:6px;border:1px solid var(--ok-bd)"></div>
+    <button class="bp" onclick="doChangePw()" style="margin-top:.75rem">Save New Password</button>
+  </div>
+</div>
+
 <script>
 /* ═══ STORE ═══ */
 const UK='dw_users_v2', RK='dw_requests_v2';
@@ -512,6 +538,11 @@ function goAuth(id){
     el.classList.remove('on');
   });
   document.getElementById('app').style.display='none';
+  // Always wipe signup fields when leaving signup screen
+  if(id!=='scrSignup'){
+    ['rName','rRole','rEmail','rPw','rPw2'].forEach(fid=>{ const el=document.getElementById(fid); if(el) el.value=''; });
+    const re=document.getElementById('rErr'); if(re) re.style.display='none';
+  }
   document.getElementById(id).classList.add('on');
 }
 
@@ -546,6 +577,8 @@ function doSignup(){
   users.push({id:'u'+Date.now(),name,role,email,pw,status:'pending',isAdmin:false,akey:null,joinedAt:new Date().toISOString()});
   saveU(users);
   err.style.display='none';
+  // Clear all signup fields so next visitor starts fresh
+  ['rName','rRole','rEmail','rPw','rPw2'].forEach(id=>{ document.getElementById(id).value=''; });
   goAuth('scrPending');
 }
 
@@ -1041,6 +1074,42 @@ function histApApprove(id){
   const reqs=loadR(); const r=reqs.find(x=>x.id===id);
   if(r){ r.approvedDone=true; saveR(reqs); } renderHist();
 }
+
+/* ═══ PASSWORD MODAL ═══ */
+function openPwModal(){
+  document.getElementById('pwModalUser').textContent=CU.name+' ('+CU.email+')';
+  ['pwOld','pwNew','pwNew2'].forEach(id=>{ document.getElementById(id).value=''; });
+  document.getElementById('pwErr').style.display='none';
+  document.getElementById('pwOk').style.display='none';
+  document.getElementById('pwModal').classList.add('on');
+}
+function closePwModal(){
+  document.getElementById('pwModal').classList.remove('on');
+}
+function closePwModalBg(e){
+  if(e.target===document.getElementById('pwModal')) closePwModal();
+}
+function doChangePw(){
+  const old=document.getElementById('pwOld').value;
+  const nw=document.getElementById('pwNew').value;
+  const nw2=document.getElementById('pwNew2').value;
+  const err=document.getElementById('pwErr');
+  const ok=document.getElementById('pwOk');
+  err.style.display='none'; ok.style.display='none';
+  if(!old||!nw||!nw2){ err.textContent='Please fill in all fields.'; err.style.display='block'; return; }
+  if(old!==CU.pw){ err.textContent='Current password is incorrect.'; err.style.display='block'; return; }
+  if(nw.length<6){ err.textContent='New password must be at least 6 characters.'; err.style.display='block'; return; }
+  if(nw!==nw2){ err.textContent='New passwords do not match.'; err.style.display='block'; return; }
+  // Save
+  const users=loadU();
+  const u=users.find(x=>x.id===CU.id);
+  if(u){ u.pw=nw; saveU(users); CU.pw=nw; }
+  ['pwOld','pwNew','pwNew2'].forEach(id=>{ document.getElementById(id).value=''; });
+  ok.textContent='Password changed successfully.';
+  ok.style.display='block';
+  setTimeout(closePwModal, 1800);
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePwModal(); });
 </script>
 </body>
 </html>
