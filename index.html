@@ -224,6 +224,7 @@ table.adt tbody tr:hover{background:var(--stripe)}
 .happ-btn{padding:6px 14px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;border:none;border-radius:7px;cursor:pointer;transition:background .15s}
 .happ-ok{background:var(--ok);color:#fff}.happ-ok:hover{background:#0a5f3f}
 .happ-pu{background:var(--pu);color:#fff}.happ-pu:hover{background:#5b21b6}
+.happ-deny{background:#fff;color:var(--err);border:1.5px solid var(--err-bd)}.happ-deny:hover{background:var(--err-bg)}
 .status-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:10px;padding:3px 10px}
 .tag-pending{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-bd)}
 .tag-check{background:var(--pu-bg);color:var(--pu);border:1px solid var(--pu-bd)}
@@ -378,39 +379,6 @@ table.adt tbody tr:hover{background:var(--stripe)}
             </div>
           </div>
         </div>
-        <div class="card">
-          <div class="ch"><div class="ci">✍️</div><div class="ct">Signatures</div></div>
-          <div class="cb">
-            <div class="apbar" id="apBar"></div>
-            <div class="srow">
-              <div class="sbox s-prep">
-                <div class="srole">Prepared by</div>
-                <div class="sline" style="border-color:var(--blue)"></div>
-                <div class="sname" id="sgnName">—</div>
-                <div class="spos"  id="sgnPos">—</div>
-                <span class="sbadge bg-blue">Preparer</span>
-              </div>
-              <div class="sbox" id="boxCk">
-                <div class="srole">Checked by</div>
-                <div class="sline" id="lineCk"></div>
-                <div class="sname">MANJOON KIM</div>
-                <div class="spos">Manager</div>
-                <div id="ckCont"></div>
-              </div>
-              <div class="sbox" id="boxAp">
-                <div class="srole">Approved by</div>
-                <div class="sline" id="lineAp"></div>
-                <div class="sname" id="apName">MANJOON KIM</div>
-                <div class="spos"  id="apPos">Manager</div>
-                <select class="ssel" id="apSel" onchange="onApChange()">
-                  <option value="manjoon">Manjoon Kim — Manager</option>
-                  <option value="sunyong">Sunyong Kim — Vice President</option>
-                </select>
-                <div id="apCont"></div>
-              </div>
-            </div>
-          </div>
-        </div>
         <div class="abar">
           <button class="bghost" onclick="resetForm()">Reset</button>
           <button class="bsub" id="submitBtn" onclick="submitForm()">Submit →</button>
@@ -437,7 +405,8 @@ table.adt tbody tr:hover{background:var(--stripe)}
           <option value="pending">Pending Review</option>
           <option value="checking">Awaiting Check</option>
           <option value="approving">Awaiting Approval</option>
-          <option value="done">Completed</option>
+          <option value="done">Approved</option>
+          <option value="denied">Denied</option>
         </select>
         <select class="hf-select" id="hfMethod" onchange="renderHist()">
           <option value="">All Payment Methods</option>
@@ -570,6 +539,7 @@ function mapRequest(r) {
            paymentMethod:r.payment_method, items:r.items||[],
            tin:r.tin, bank:r.bank, acno:r.acno, acnm:r.acnm, addr:r.addr,
            approver:r.approver, checkedDone:r.checked_done, approvedDone:r.approved_done,
+           denied:r.denied||false,
            submittedAt:r.submitted_at };
 }
 
@@ -926,6 +896,7 @@ function newForm() {
    HISTORY
 ═══════════════════════════════════ */
 function getStatus(r) {
+  if (r.denied) return 'denied';
   if (r.approvedDone) return 'done';
   if (r.approver==='sunyong'&&r.checkedDone&&!r.approvedDone) return 'approving';
   if (r.approver==='sunyong'&&!r.checkedDone) return 'checking';
@@ -933,7 +904,13 @@ function getStatus(r) {
   return 'pending';
 }
 function statusLabel(st){
-  const map={pending:'<span class="status-tag tag-pending">Pending Review</span>',checking:'<span class="status-tag tag-check">Awaiting Check</span>',approving:'<span class="status-tag tag-check">Awaiting Approval</span>',done:'<span class="status-tag tag-done">✓ Completed</span>'};
+  const map={
+    pending:'<span class="status-tag tag-pending">Pending Review</span>',
+    checking:'<span class="status-tag tag-check">Awaiting Check</span>',
+    approving:'<span class="status-tag tag-check">Awaiting Approval</span>',
+    done:'<span class="status-tag tag-done">✓ Approved</span>',
+    denied:'<span class="status-tag" style="background:var(--err-bg);color:var(--err);border:1px solid var(--err-bd)">✕ Denied</span>'
+  };
   return map[st]||'';
 }
 function payMethodLabel(pm){
@@ -998,11 +975,27 @@ async function renderHist() {
         <td class="r">${it.tot?'₱ '+parseFloat(it.tot).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}):''}</td>
       </tr>`).join('');
       let appBar='';
-      if(CU.isAdmin&&st!=='done'){
-        const isMj=CU.akey==='manjoon',isSy=CU.akey==='sunyong';
-        if(sy&&!r.checkedDone&&isMj) appBar+=`<button class="happ-btn happ-ok" onclick="histCkApprove('${r.id}')">✓ Approve (Checked by)</button>`;
-        if((!sy&&!r.approvedDone&&isMj)||(sy&&r.checkedDone&&!r.approvedDone&&isSy)) appBar+=`<button class="happ-btn happ-pu" onclick="histApApprove('${r.id}')">✓ Final Approve</button>`;
-        if(appBar) appBar=`<div class="hist-approve-bar"><span>Actions for this request:</span>${appBar}</div>`;
+      if(CU.isAdmin && st!=='done' && st!=='denied'){
+        const isMj=CU.akey==='manjoon', isSy=CU.akey==='sunyong';
+        let approveBtn='', denyBtn='';
+        // Approve (Check) — Checked by for sunyong flow, shown to Manjoon
+        if(sy && !r.checkedDone && isMj){
+          approveBtn+=`<button class="happ-btn happ-ok" onclick="histCkApprove('${r.id}')">✓ Approve (Check)</button>`;
+        }
+        // Approve — Final approval
+        if((!sy&&!r.approvedDone&&isMj)||(sy&&r.checkedDone&&!r.approvedDone&&isSy)){
+          approveBtn+=`<button class="happ-btn happ-pu" onclick="histApApprove('${r.id}')">✓ Approve</button>`;
+        }
+        // Deny — any admin can deny at any stage
+        denyBtn=`<button class="happ-btn happ-deny" onclick="histDeny('${r.id}')">✕ Deny</button>`;
+        if(approveBtn||denyBtn){
+          appBar=`<div class="hist-approve-bar">
+            <span>Actions:</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">${approveBtn}${denyBtn}</div>
+          </div>`;
+        }
+      } else if(st==='denied'){
+        appBar=`<div class="hist-approve-bar"><span style="color:var(--err);font-weight:600">This request has been denied.</span></div>`;
       }
       const byLine=CU.isAdmin?`<span style="font-size:11px;color:var(--th);margin-left:8px">by ${r.submittedByName}</span>`:'';
       const cardStyle=isCheck?'border-color:#fdba74;':'';
@@ -1051,6 +1044,10 @@ async function histCkApprove(id){
 }
 async function histApApprove(id){
   await sbPatch('requests',{id},{approved_done:true}); renderHist();
+}
+async function histDeny(id){
+  if(!confirm('Are you sure you want to deny this request?')) return;
+  await sbPatch('requests',{id},{denied:true}); renderHist();
 }
 
 /* ═══════════════════════════════════
