@@ -429,8 +429,8 @@ table.adt tbody tr:hover{background:var(--stripe)}
 
     <!-- ── HISTORY TAB ── -->
     <div id="tabHist" style="display:none">
-      <div class="ph">My Requests</div>
-      <div class="ps">View submitted payment requests and their approval status</div>
+      <div class="ph" id="histPageTitle">My Requests</div>
+      <div class="ps" id="histPageSub">View submitted payment requests and their approval status</div>
       <div class="hist-filters">
         <select class="hf-select" id="hfStatus" onchange="renderHist()">
           <option value="">All Statuses</option>
@@ -494,8 +494,9 @@ const saveR=a=>localStorage.setItem(RK,JSON.stringify(a));
 /* Seed admins */
 (()=>{
   let u=loadU();
-  [{id:'adm1',name:'Manjoon Kim',role:'Manager',email:'manjoon@dw.com',pw:'admin1234',status:'approved',isAdmin:true,akey:'manjoon'},
-   {id:'adm2',name:'Sunyong Kim',role:'Vice President',email:'sunyong@dw.com',pw:'admin1234',status:'approved',isAdmin:true,akey:'sunyong'}]
+  // Remove sunyong account if it exists
+  u=u.filter(x=>x.email!=='sunyong@dw.com');
+  [{id:'adm1',name:'Manjoon Kim',role:'Manager',email:'manjoon@dw.com',pw:'admin1234',status:'approved',isAdmin:true,akey:'manjoon'}]
   .forEach(s=>{ if(!u.find(x=>x.email===s.email)) u.push(s); });
   saveU(u);
 })();
@@ -570,6 +571,7 @@ function launchApp(){
   document.getElementById('uName').textContent=CU.name;
   document.getElementById('aBadge').style.display=CU.isAdmin?'':'none';
   document.getElementById('tbAdmin').style.display=CU.isAdmin?'':'none';
+  document.getElementById('tbHist').textContent=CU.isAdmin?'All Requests':'My Requests';
   goTab('form');
   initForm();
 }
@@ -612,53 +614,39 @@ function renderAdm(){
   const tb=document.getElementById('admBody');
   if(!users.length){ tb.innerHTML=`<tr><td colspan="7"><div class="empty">No users found.</div></td></tr>`; return; }
   tb.innerHTML=users.map(u=>{
-    const isCurrentUser = CU && u.id===CU.id;
+    const isMe = CU && u.id===CU.id;
     const pill = u.status==='pending' ? '<span class="pill pill-p">Pending</span>'
                : u.status==='approved'? '<span class="pill pill-ok">Approved</span>'
                :                        '<span class="pill pill-no">Rejected</span>';
-    const rolePill = u.isAdmin
-      ? '<span class="pill" style="background:#fef9c3;color:#854d0e;border:1px solid #fde047">Admin</span>'
-      : '<span class="pill" style="background:#f0f9ff;color:#0369a1;border:1px solid #7dd3fc">User</span>';
     const dt = u.joinedAt ? new Date(u.joinedAt).toLocaleDateString('en-US') : '—';
 
-    // Actions column
+    const roleSelect = `<select onchange="admChangeRole('${u.id}',this.value)"
+      style="width:100%;padding:5px 7px;font-size:12px;font-family:'DM Sans',sans-serif;border:1.5px solid var(--bd);border-radius:6px;background:#fff;color:var(--text);cursor:${isMe?'default':'pointer'}"
+      ${isMe?'disabled':''}>
+      <option value="user"  ${!u.isAdmin?'selected':''}>User</option>
+      <option value="admin" ${ u.isAdmin?'selected':''}>Admin</option>
+    </select>`;
+
     let acts = '';
-    if(isCurrentUser){
-      acts = '<span style="font-size:11px;color:var(--th)">You</span>';
+    if(isMe){
+      acts = '<span style="font-size:11px;color:var(--th);padding:4px 8px">You</span>';
     } else {
-      // Approve/Reject for pending
       if(u.status==='pending'){
-        acts += `<button class="bok" onclick="admOk('${u.id}')">Approve</button> `;
-        acts += `<button class="bno" onclick="admNo('${u.id}')">Reject</button> `;
+        acts += `<button class="bok" onclick="admOk('${u.id}')">Approve</button>`;
+        acts += `<button class="bno" onclick="admNo('${u.id}')">Reject</button>`;
       }
-      // Role toggle
-      if(u.isAdmin){
-        acts += `<button class="bno" style="margin-top:4px" onclick="admSetRole('${u.id}',false)">→ User</button>`;
-      } else {
-        acts += `<button class="bok" style="margin-top:4px;background:var(--warn);border:none" onclick="admSetRole('${u.id}',true)">→ Admin</button>`;
-      }
-      if(!acts.trim()) acts = '—';
-      else acts = `<div class="actb" style="flex-wrap:wrap;gap:4px">${acts}</div>`;
+      acts += `<button onclick="admDelete('${u.id}')" style="padding:5px 10px;background:#fff;color:var(--err);border:1.5px solid var(--err-bd);border-radius:6px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;" onmouseover="this.style.background='var(--err-bg)'" onmouseout="this.style.background='#fff'">Delete</button>`;
+      acts = `<div class="actb" style="flex-wrap:wrap;gap:4px">${acts}</div>`;
     }
 
     return `<tr>
-      <td><strong>${u.name}</strong></td>
+      <td><strong>${u.name}</strong>${isMe?' <span style="font-size:10px;color:var(--blue);background:var(--blue-l);border-radius:8px;padding:1px 6px">You</span>':''}</td>
       <td>${u.role}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${u.email}</td>
-      <td>
-        ${rolePill}
-        <select class="adm-role-sel" onchange="admChangeRole('${u.id}',this.value)" style="margin-top:5px;width:100%;padding:4px 6px;font-size:11px;font-family:'DM Sans',sans-serif;border:1.5px solid var(--bd);border-radius:6px;background:#fff;color:var(--text);cursor:${isCurrentUser?'default':'pointer'}" ${isCurrentUser?'disabled':''}>
-          <option value="user"  ${!u.isAdmin?'selected':''}>User</option>
-          <option value="admin" ${ u.isAdmin?'selected':''}>Admin</option>
-        </select>
-      </td>
+      <td style="min-width:100px">${roleSelect}</td>
       <td>${dt}</td>
       <td>${pill}</td>
-      <td>${isCurrentUser?'<span style="font-size:11px;color:var(--th)">You</span>':
-        `<div class="actb" style="flex-wrap:wrap;gap:4px">
-          ${u.status==='pending'?`<button class="bok" onclick="admOk('${u.id}')">Approve</button><button class="bno" onclick="admNo('${u.id}')">Reject</button>`:''}
-        </div>`
-      }</td>
+      <td>${acts}</td>
     </tr>`;
   }).join('');
 }
@@ -668,13 +656,19 @@ function admChangeRole(id, newRole){
   const x=users.find(v=>v.id===id);
   if(!x || (CU && x.id===CU.id)) return;
   x.isAdmin = (newRole==='admin');
-  // if promoting to admin, auto-approve
   if(x.isAdmin && x.status!=='approved') x.status='approved';
   saveU(users);
   renderAdm();
 }
 function admOk(id){ const u=loadU(); const x=u.find(v=>v.id===id); if(x) x.status='approved'; saveU(u); renderAdm(); }
 function admNo(id){ if(!confirm('Are you sure you want to reject this account request?')) return; const u=loadU(); const x=u.find(v=>v.id===id); if(x) x.status='rejected'; saveU(u); renderAdm(); }
+function admDelete(id){
+  const u=loadU(); const x=u.find(v=>v.id===id);
+  if(!x) return;
+  if(!confirm(`Delete account "${x.name}" (${x.email})? This cannot be undone.`)) return;
+  saveU(u.filter(v=>v.id!==id));
+  renderAdm();
+}
 
 /* ═══ INIT FORM ═══ */
 function initForm(){
@@ -919,15 +913,23 @@ function renderHist(){
   const fStatus=document.getElementById('hfStatus').value;
   const fMethod=document.getElementById('hfMethod').value;
   const fQ=(document.getElementById('hfQ').value||'').toLowerCase();
-  // non-admin sees only own, admin sees all
+  // admin sees all requests, user sees only their own
   const visible=CU.isAdmin ? reqs : reqs.filter(r=>r.submittedBy===CU.id);
   const filtered=visible.filter(r=>{
     const st=getStatus(r);
     if(fStatus&&st!==fStatus) return false;
     if(fMethod&&(r.paymentMethod||'cash')!==fMethod) return false;
-    if(fQ&&!r.reqNo.toLowerCase().includes(fQ)&&!r.company.toLowerCase().includes(fQ)) return false;
+    if(fQ&&!r.reqNo.toLowerCase().includes(fQ)&&!r.company.toLowerCase().includes(fQ)&&!(r.submittedByName||'').toLowerCase().includes(fQ)) return false;
     return true;
   });
+  // update heading
+  if(CU.isAdmin){
+    document.getElementById('histPageTitle').textContent='All Requests';
+    document.getElementById('histPageSub').textContent='Showing all submitted payment requests across all users';
+  } else {
+    document.getElementById('histPageTitle').textContent='My Requests';
+    document.getElementById('histPageSub').textContent='View submitted payment requests and their approval status';
+  }
 
   const list=document.getElementById('histList');
   if(!filtered.length){ list.innerHTML='<div class="empty" style="padding:3rem;text-align:center;color:var(--th)">No requests found.</div>'; return; }
