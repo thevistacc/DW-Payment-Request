@@ -645,6 +645,21 @@ table.adt tbody tr:hover{background:var(--stripe)}
   </div>
 </div>
 
+<!-- ADMIN RESET PASSWORD MODAL -->
+<div class="modal-backdrop" id="resetPwModal" onclick="closeResetPwModalBg(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeResetPwModal()">✕</button>
+    <div class="modal-title">Reset Password</div>
+    <div class="modal-sub">Set a new password for <strong id="resetPwUserName"></strong></div>
+    <input type="hidden" id="resetPwUserId" />
+    <div class="f"><label>New Password</label><input type="password" id="resetPwNew" placeholder="Min 8 chars, upper, lower, number" /></div>
+    <div class="f" style="margin-bottom:0"><label>Confirm New Password</label><input type="password" id="resetPwNew2" placeholder="Re-enter new password" /></div>
+    <div class="emsg" id="resetPwErr"></div>
+    <div id="resetPwOk" style="font-size:12px;color:var(--ok);margin-top:8px;display:none;background:var(--ok-bg);padding:8px 10px;border-radius:6px;border:1px solid var(--ok-bd)"></div>
+    <button class="bp" id="resetPwBtn" onclick="doAdminResetPw()" style="margin-top:.75rem">Reset Password</button>
+  </div>
+</div>
+
 <script>
 /* ═══════════════════════════════════
    SUPABASE CONFIG
@@ -1386,6 +1401,7 @@ async function renderAdm() {
         acts='<span style="font-size:11px;color:var(--th);padding:4px 8px">You</span>';
       } else {
         if(u.status==='pending') acts+=`<button class="bok" onclick="admOk('${u.id}')">Approve</button><button class="bno" onclick="admNo('${u.id}')">Reject</button>`;
+        acts+=`<button onclick="admResetPw('${u.id}','${u.name}')" style="padding:5px 10px;background:#fff;color:var(--blue);border:1.5px solid #a8c8f0;border-radius:6px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;" onmouseover="this.style.background='var(--blue-l)'" onmouseout="this.style.background='#fff'">Reset PW</button>`;
         acts+=`<button onclick="admDelete('${u.id}')" style="padding:5px 10px;background:#fff;color:var(--err);border:1.5px solid var(--err-bd);border-radius:6px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;" onmouseover="this.style.background='var(--err-bg)'" onmouseout="this.style.background='#fff'">Delete</button>`;
         acts=`<div class="actb">${acts}</div>`;
       }
@@ -1418,6 +1434,45 @@ async function admDelete(id){
   if(!confirm(`Delete account "${u.name}" (${u.email})? This cannot be undone.`)) return;
   await sbDelete('users',{id}); renderAdm();
 }
+
+async function admResetPw(id, name) {
+  document.getElementById('resetPwUserId').value = id;
+  document.getElementById('resetPwUserName').textContent = name;
+  document.getElementById('resetPwNew').value = '';
+  document.getElementById('resetPwNew2').value = '';
+  document.getElementById('resetPwErr').style.display = 'none';
+  document.getElementById('resetPwOk').style.display = 'none';
+  document.getElementById('resetPwModal').classList.add('on');
+}
+
+async function doAdminResetPw() {
+  const id  = document.getElementById('resetPwUserId').value;
+  const nw  = document.getElementById('resetPwNew').value;
+  const nw2 = document.getElementById('resetPwNew2').value;
+  const err = document.getElementById('resetPwErr');
+  const ok  = document.getElementById('resetPwOk');
+  const btn = document.getElementById('resetPwBtn');
+  err.style.display = 'none'; ok.style.display = 'none';
+  if (!nw || !nw2) { err.textContent='Please fill in both fields.'; err.style.display='block'; return; }
+  if (nw !== nw2)  { err.textContent='Passwords do not match.'; err.style.display='block'; return; }
+  const pwErrors = validatePassword(nw);
+  if (pwErrors.length) { err.textContent='Password must include: '+pwErrors.join(', ')+'.'; err.style.display='block'; return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await sbPatch('users', {id}, {pw: nw});
+    ok.textContent = 'Password reset successfully.';
+    ok.style.display = 'block';
+    setTimeout(() => document.getElementById('resetPwModal').classList.remove('on'), 1800);
+  } catch(e) {
+    err.textContent = 'Failed to reset password. Please try again.';
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Reset Password';
+  }
+}
+
+function closeResetPwModal() { document.getElementById('resetPwModal').classList.remove('on'); }
+function closeResetPwModalBg(e) { if(e.target===document.getElementById('resetPwModal')) closeResetPwModal(); }
 
 /* ═══════════════════════════════════
    PASSWORD MODAL
