@@ -216,11 +216,9 @@ table.adt tbody tr:hover{background:var(--stripe)}
 .hist-summary-label{font-size:11px;font-weight:600;color:rgba(255,255,255,.7);letter-spacing:.05em;text-transform:uppercase}
 .hist-summary-value{font-size:20px;font-weight:700;color:#fff;font-family:'DM Mono',monospace;line-height:1.2}
 .hist-summary-sub{font-size:11px;color:rgba(255,255,255,.6)}
-/* MONTH TABS */
-.month-tab-wrap{display:flex;align-items:center;gap:8px;margin-bottom:1rem;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
-.month-tab{font-size:12px;font-weight:600;padding:6px 14px;border-radius:20px;border:1.5px solid var(--bd);background:#fff;color:var(--ts);cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;transition:all .15s;flex-shrink:0}
-.month-tab:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-l)}
-.month-tab.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+/* YEAR/MONTH FILTER */
+.ym-filter-wrap{display:flex;align-items:center;gap:10px;margin-bottom:1rem}
+.ym-filter-wrap .hf-select{min-width:130px}
 .hist-filters{display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap}
 .hf-select{padding:7px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);background:#fff;cursor:pointer}
 .hf-select:focus{outline:none;border-color:var(--bdf)}
@@ -273,9 +271,9 @@ table.adt tbody tr:hover{background:var(--stripe)}
 .tag-check{background:var(--pu-bg);color:var(--pu);border:1px solid var(--pu-bd)}
 .tag-done{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-bd)}
 .pay-method-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:10px;padding:3px 9px}
-.pm-cash{background:#f0fdf4;color:#166534;border:1px solid #86efac}
-.pm-check{background:#fff7ed;color:#9a3412;border:1px solid #fdba74}
-.pm-transfer{background:#eff6ff;color:#1e40af;border:1px solid #93c5fd}
+.pm-cash{background:none;color:var(--ts);border:none;padding-left:0;padding-right:0}
+.pm-check{background:#fff7ed;color:#9a3412;border:1.5px solid #fdba74;font-weight:700}
+.pm-transfer{background:none;color:var(--ts);border:none;padding-left:0;padding-right:0}
 .check-indicator{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;background:#fff7ed;color:#9a3412;border:1.5px solid #fdba74;border-radius:8px;padding:4px 10px;margin-left:6px;vertical-align:middle}
 /* PASSWORD MODAL */
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(10,20,50,.45);z-index:200;align-items:center;justify-content:center;padding:1rem}
@@ -321,7 +319,6 @@ table.adt tbody tr:hover{background:var(--stripe)}
   .hist-summary{padding:12px 14px;gap:10px}
   .hist-summary-value{font-size:16px}
   .hist-summary-item:not(:last-child){padding-right:10px}
-  .month-tab{font-size:11px;padding:5px 11px}
   .hf-select{flex:1;min-width:0;font-size:13px;padding:6px 10px}
   .hf-search{font-size:16px;min-width:0}
   .hist-card{border-radius:10px}
@@ -529,15 +526,34 @@ table.adt tbody tr:hover{background:var(--stripe)}
       <div class="ph" id="histPageTitle">My Requests</div>
       <div class="ps" id="histPageSub">View submitted payment requests and their approval status</div>
 
-      <!-- MONTH TABS -->
-      <div class="month-tab-wrap" id="monthTabWrap"></div>
+      <!-- YEAR / MONTH FILTER -->
+      <div class="ym-filter-wrap" id="ymFilterWrap">
+        <select class="hf-select" id="ymYear" onchange="onYMChange()">
+          <option value="">All Years</option>
+        </select>
+        <select class="hf-select" id="ymMonth" onchange="onYMChange()">
+          <option value="">All Months</option>
+          <option value="01">January</option>
+          <option value="02">February</option>
+          <option value="03">March</option>
+          <option value="04">April</option>
+          <option value="05">May</option>
+          <option value="06">June</option>
+          <option value="07">July</option>
+          <option value="08">August</option>
+          <option value="09">September</option>
+          <option value="10">October</option>
+          <option value="11">November</option>
+          <option value="12">December</option>
+        </select>
+      </div>
 
       <!-- SUMMARY BAR -->
       <div class="hist-summary" id="histSummary" style="display:none">
         <div class="hist-summary-item">
           <div class="hist-summary-label">Total Amount</div>
           <div class="hist-summary-value" id="sumTotal">₱ 0.00</div>
-          <div class="hist-summary-sub" id="sumPeriod">All requests</div>
+          <div class="hist-summary-sub" id="sumPeriod">All time</div>
         </div>
         <div class="hist-summary-item">
           <div class="hist-summary-label">Requests</div>
@@ -855,7 +871,7 @@ async function goTab(t) {
     document.getElementById('succView').style.display = 'none';
     if (!document.getElementById('reqNo').value) await initForm();
   }
-  if (t==='hist') { selectedMonth=''; renderHist(); }
+  if (t==='hist') { selectedMonth=''; document.getElementById('ymYear').value=''; document.getElementById('ymMonth').value=''; renderHist(); }
   if (t==='admin') renderAdm();
 }
 
@@ -1078,20 +1094,20 @@ async function renderHist() {
       document.getElementById('histPageSub').textContent='View submitted payment requests and their approval status';
     }
 
-    // Build month tabs from all data (before any filter)
-    buildMonthTabs(reqs);
+    // Populate year dropdown from data
+    populateYMFilter(reqs);
 
     const fStatus=document.getElementById('hfStatus').value;
     const fMethod=document.getElementById('hfMethod').value;
     const fQ=(document.getElementById('hfQ').value||'').toLowerCase();
+    const fYear=document.getElementById('ymYear').value;
+    const fMonth=document.getElementById('ymMonth').value;
 
     const filtered=reqs.filter(r=>{
       const st=getStatus(r);
-      // month filter
-      if(selectedMonth){
-        const ym=(r.submittedAt||r.reqDate||'').slice(0,7);
-        if(ym!==selectedMonth) return false;
-      }
+      const dateStr = (r.submittedAt || r.reqDate || '');
+      if(fYear && !dateStr.startsWith(fYear)) return false;
+      if(fMonth && dateStr.slice(5,7) !== fMonth) return false;
       if(fStatus&&st!==fStatus) return false;
       if(fMethod&&(r.paymentMethod||'cash')!==fMethod) return false;
       if(fQ&&!r.reqNo.toLowerCase().includes(fQ)&&!r.company.toLowerCase().includes(fQ)&&!(r.submittedByName||'').toLowerCase().includes(fQ)) return false;
@@ -1158,11 +1174,11 @@ async function renderHist() {
           <div class="hist-left">
             <div>
               <div class="hist-title">${r.company}${byLine}${checkIndicator}</div>
-              <div class="hist-meta">${r.purpose.slice(0,55)}${r.purpose.length>55?'…':''} · 제출 ${dt}</div>
+              <div class="hist-meta">${r.purpose.slice(0,55)}${r.purpose.length>55?'…':''} · Submitted ${dt}</div>
             </div>
           </div>
           <div class="hist-right">
-            <div class="hist-paydate"><span class="hist-paydate-label">결제예정</span><span class="hist-paydate-val">${r.payDate}</span></div>
+            <div class="hist-paydate"><span class="hist-paydate-label">Est. Payment</span><span class="hist-paydate-val">${r.payDate}</span></div>
             ${pmTag}${stag}<span class="hist-amount">${sub}</span><span class="chevron" id="hc${r.id}">▼</span></div>
         </div>
         <div class="hist-body" id="hb${r.id}">
@@ -1189,27 +1205,27 @@ async function renderHist() {
   }
 }
 
-function buildMonthTabs(reqs) {
-  const wrap = document.getElementById('monthTabWrap');
-  // Collect unique YYYY-MM values
-  const monthSet = new Set();
+function populateYMFilter(reqs) {
+  const yearSet = new Set();
   reqs.forEach(r => {
-    const ym = (r.submittedAt || r.reqDate || '').slice(0,7);
-    if (ym) monthSet.add(ym);
+    const y = (r.submittedAt || r.reqDate || '').slice(0, 4);
+    if (y) yearSet.add(y);
   });
-  const months = Array.from(monthSet).sort().reverse();
-
-  let html = `<button class="month-tab ${selectedMonth===''?'on':''}" onclick="selectMonth('')">전체</button>`;
-  months.forEach(ym => {
-    const [y, m] = ym.split('-');
-    const label = `${y}년 ${parseInt(m)}월`;
-    html += `<button class="month-tab ${selectedMonth===ym?'on':''}" onclick="selectMonth('${ym}')">${label}</button>`;
+  const years = Array.from(yearSet).sort().reverse();
+  const yearSel = document.getElementById('ymYear');
+  const curYear = yearSel.value;
+  yearSel.innerHTML = '<option value="">All Years</option>';
+  years.forEach(y => {
+    yearSel.innerHTML += `<option value="${y}" ${curYear===y?'selected':''}>${y}</option>`;
   });
-  wrap.innerHTML = html;
 }
 
-function selectMonth(ym) {
-  selectedMonth = ym;
+function onYMChange() {
+  const y = document.getElementById('ymYear').value;
+  const m = document.getElementById('ymMonth').value;
+  if (y && m) selectedMonth = `${y}-${m}`;
+  else if (y) selectedMonth = y; // year only — handled in filter
+  else selectedMonth = '';
   renderHist();
 }
 
@@ -1227,12 +1243,12 @@ function updateSummaryBar(filtered) {
   document.getElementById('sumApproved').textContent = approved + ' approved';
   document.getElementById('sumPending').textContent = pending;
 
-  if (selectedMonth) {
-    const [y,m] = selectedMonth.split('-');
-    document.getElementById('sumPeriod').textContent = `${y}년 ${parseInt(m)}월`;
-  } else {
-    document.getElementById('sumPeriod').textContent = '전체 기간';
-  }
+  const y = document.getElementById('ymYear').value;
+  const m = document.getElementById('ymMonth').value;
+  const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+  if (y && m) document.getElementById('sumPeriod').textContent = `${monthNames[parseInt(m)]} ${y}`;
+  else if (y) document.getElementById('sumPeriod').textContent = y;
+  else document.getElementById('sumPeriod').textContent = 'All time';
 }
 
 function toggleHist(bodyId,chevId){
