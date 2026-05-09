@@ -253,6 +253,86 @@ table.adt tbody tr:hover{background:var(--stripe)}
 .modal-sub{font-size:13px;color:var(--ts);margin-bottom:1.5rem}
 .modal-close{position:absolute;top:14px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--th);line-height:1}
 .modal-close:hover{color:var(--text)}
+
+/* ═══ MOBILE RESPONSIVE ═══ */
+@media(max-width:768px){
+  .topbar{padding:0 .75rem;height:auto;min-height:52px;flex-wrap:wrap}
+  .tl{flex-wrap:wrap;gap:6px;width:100%;padding:8px 0 2px}
+  .ttitle{font-size:13px}
+  .tsub{display:none}
+  .tabs{margin-left:0;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .tb{font-size:11px;padding:4px 10px;white-space:nowrap}
+  .tr{width:100%;justify-content:flex-end;padding:2px 0 6px}
+  .uname{font-size:12px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .abadge{display:none}
+  .lbtn{font-size:11px;padding:3px 8px}
+  .pc{padding:.875rem .75rem 3rem}
+  .ph{font-size:17px}
+  .ps{font-size:12px;margin-bottom:1rem}
+  .card{border-radius:10px}
+  .ch{padding:11px 14px}
+  .ct{font-size:12px}
+  .cb{padding:14px}
+  .fg{grid-template-columns:1fr!important;gap:10px}
+  .fg3{grid-template-columns:1fr!important;gap:10px}
+  .ff input,.ff textarea,.ff select{font-size:16px}
+  .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table.et{min-width:580px}
+  table.et th{font-size:10px;padding:7px 6px}
+  table.et td input{font-size:14px;padding:5px 4px}
+  .stbar{padding:11px 14px}
+  .stval{font-size:16px}
+  .addbtn{font-size:12px;padding:7px 12px}
+  .abar{flex-direction:column;gap:8px}
+  .abar .bghost,.abar .bsub{width:100%;text-align:center;padding:13px;font-size:15px}
+  .hist-filters{gap:7px}
+  .hf-select{flex:1;min-width:0;font-size:13px;padding:6px 10px}
+  .hf-search{font-size:16px;min-width:0}
+  .hist-card{border-radius:10px}
+  .hist-head{flex-direction:column;align-items:flex-start;gap:6px;padding:12px 14px}
+  .hist-left{width:100%;gap:8px}
+  .hist-right{width:100%;margin-left:0;justify-content:space-between}
+  .hist-reqno{font-size:11px}
+  .hist-title{font-size:13px}
+  .hist-meta{font-size:11px}
+  .hist-amount{font-size:13px}
+  .hist-body{padding:12px 14px}
+  .hdet-grid{grid-template-columns:1fr 1fr!important;gap:8px}
+  .hdet-item label{font-size:9px}
+  .hdet-item span{font-size:12px}
+  .pinfo strong{font-size:10px}
+  .pinfo span{font-size:9px}
+  .pline{min-width:10px;margin:0 3px}
+  .pdot{width:22px;height:22px;font-size:10px}
+  .hexp-table{min-width:420px}
+  .hist-approve-bar{flex-direction:column;align-items:flex-start;gap:8px}
+  .happ-btn{padding:8px 14px;font-size:13px}
+  .status-tag{font-size:10px;padding:2px 8px}
+  .pay-method-tag{font-size:10px;padding:2px 7px}
+  .check-indicator{font-size:10px;padding:3px 8px}
+  .ac{padding:2rem 1.25rem}
+  .ah{font-size:19px}
+  .as{font-size:12px;margin-bottom:1.25rem}
+  .f2{grid-template-columns:1fr;gap:0}
+  .f input,.f select{font-size:16px}
+  .bp,.bs{font-size:14px;padding:12px}
+  .succwrap{margin:2rem auto;padding:1.75rem 1.25rem}
+  .succicon{font-size:40px}
+  .succtit{font-size:18px}
+  .succsub{font-size:13px}
+  .rchip{font-size:12px}
+  .modal{padding:1.5rem 1.25rem;margin:.5rem}
+  .modal .f input{font-size:16px}
+  .modal-title{font-size:15px}
+  table.adt{min-width:520px}
+  .admFQ,.admFRole,.admFStatus{font-size:13px}
+}
+@media(max-width:400px){
+  .tb{font-size:10px;padding:4px 7px}
+  .hist-right{flex-wrap:wrap;gap:4px}
+  .hdet-grid{grid-template-columns:1fr!important}
+  .check-indicator{display:none}
+}
 </style>
 </head>
 <body>
@@ -728,11 +808,6 @@ function initForm() {
   document.getElementById('payMethod').value = 'cash';
   updateSt();
   AP = { submitted:false, approver:'manjoon', checkedDone:false, approvedDone:false };
-  document.getElementById('apSel').value = 'manjoon';
-  document.getElementById('apSel').style.display = '';
-  document.getElementById('apName').textContent = 'MANJOON KIM';
-  document.getElementById('apPos').textContent = 'Manager';
-  renderSigns();
 }
 
 /* ═══════════════════════════════════
@@ -780,85 +855,29 @@ function updateSt() {
    APPROVER / SIGNATURES
 ═══════════════════════════════════ */
 function onApChange() {
-  AP.approver = document.getElementById('apSel').value;
+  AP.approver = document.getElementById('apSel') ? document.getElementById('apSel').value : 'manjoon';
   AP.checkedDone = false; AP.approvedDone = false;
-  document.getElementById('apName').textContent = AP.approver==='sunyong'?'SUNYONG KIM':'MANJOON KIM';
-  document.getElementById('apPos').textContent  = AP.approver==='sunyong'?'Vice President':'Manager';
-  renderSigns();
 }
 
-function renderSigns() {
-  const ap=AP, sy=ap.approver==='sunyong';
-  const isMj=CU&&CU.akey==='manjoon', isSy=CU&&CU.akey==='sunyong';
-  const bc=document.getElementById('boxCk'), cc=document.getElementById('ckCont'), lc=document.getElementById('lineCk');
-  if (!sy) {
-    bc.className='sbox s-na'; lc.style.borderColor='var(--bd)';
-    cc.innerHTML='<span class="sbadge bg-gray">Not Required</span>';
-  } else if (ap.checkedDone) {
-    bc.className='sbox s-ok'; lc.style.borderColor='var(--ok)';
-    cc.innerHTML='<span class="sbadge bg-ok">✓ Approved</span>';
-  } else if (ap.submitted && isMj) {
-    bc.className='sbox s-pend'; lc.style.borderColor='var(--pu)';
-    cc.innerHTML='<span class="sbadge bg-pu">Awaiting Approval</span><button class="appbtn g" onclick="doCkApprove()">✓ Approve</button>';
-  } else if (ap.submitted) {
-    bc.className='sbox'; lc.style.borderColor='var(--bd)';
-    cc.innerHTML='<span class="sbadge bg-warn">Pending</span>';
-  } else {
-    bc.className='sbox'; lc.style.borderColor='var(--bd)'; cc.innerHTML='';
-  }
-  const ba=document.getElementById('boxAp'), ca=document.getElementById('apCont'), la=document.getElementById('lineAp');
-  document.getElementById('apSel').style.display = ap.submitted?'none':'';
-  const canAp=sy?isSy:isMj, locked=sy&&!ap.checkedDone&&ap.submitted;
-  if (ap.approvedDone) {
-    ba.className='sbox s-ok'; la.style.borderColor='var(--ok)';
-    ca.innerHTML='<span class="sbadge bg-ok">✓ Final Approved</span>';
-  } else if (locked) {
-    ba.className='sbox s-lock'; la.style.borderColor='var(--bd)';
-    ca.innerHTML='<span class="sbadge bg-gray">Locked</span><div class="locknote">🔒 Unlocks after Checked by approval</div>';
-  } else if (ap.submitted && canAp) {
-    ba.className='sbox s-pend'; la.style.borderColor='var(--pu)';
-    ca.innerHTML='<span class="sbadge bg-pu">Awaiting Approval</span><button class="appbtn p" onclick="doApApprove()">✓ Final Approve</button>';
-  } else if (ap.submitted) {
-    ba.className='sbox'; la.style.borderColor='var(--bd)';
-    ca.innerHTML='<span class="sbadge bg-warn">Pending</span>';
-  } else {
-    ba.className='sbox'; la.style.borderColor='var(--bd)'; ca.innerHTML='';
-  }
-  renderProgress();
-}
+function renderSigns() { /* signatures card removed — no-op */ }
 
 async function doCkApprove() {
   if (!CU||CU.akey!=='manjoon') return;
-  AP.checkedDone = true; renderSigns();
+  AP.checkedDone = true;
   if (currentReqId) await sbPatch('requests',{id:currentReqId},{checked_done:true});
 }
 async function doApApprove() {
   if (!CU) return;
   if (AP.approver==='sunyong'&&CU.akey!=='sunyong') return;
   if (AP.approver==='manjoon'&&CU.akey!=='manjoon') return;
-  AP.approvedDone = true; renderSigns();
+  AP.approvedDone = true;
   if (currentReqId) await sbPatch('requests',{id:currentReqId},{approved_done:true});
 }
 
 function renderProgress() {
-  const ap=AP, bar=document.getElementById('apBar');
-  if (!ap.submitted) { bar.innerHTML=''; return; }
-  const sy=ap.approver==='sunyong';
-  const steps=sy?[
-    {label:'Submitted',sub:'Prepared by',done:true},
-    {label:'Reviewed',sub:'Manjoon Kim',done:ap.checkedDone},
-    {label:'Final Approved',sub:'Sunyong Kim',done:ap.approvedDone}
-  ]:[
-    {label:'Submitted',sub:'Prepared by',done:true},
-    {label:'Approved',sub:'Manjoon Kim',done:ap.approvedDone}
-  ];
-  let h='';
-  steps.forEach((s,i)=>{
-    const cls=s.done?'done':(i===steps.findIndex(x=>!x.done)?'act':'wait');
-    h+=`<div class="apstep"><div class="apdot ${cls}">${s.done?'✓':i+1}</div><div class="apinfo"><strong>${s.label}</strong><span>${s.sub}</span></div></div>`;
-    if(i<steps.length-1) h+=`<div class="apline ${steps[i].done?'done':''}"></div>`;
-  });
-  bar.innerHTML=h;
+  const bar = document.getElementById('apBar');
+  if (!bar) return;
+  bar.innerHTML = '';
 }
 
 /* ═══════════════════════════════════
@@ -905,15 +924,11 @@ async function submitForm() {
       checked_done:false, approved_done:false
     });
     currentReqId=reqId;
-    // Send push notification to all subscribed devices (non-blocking)
     sendPushNotification({ reqNo:rn, company:co, submittedByName:CU.name, subtotal:sub, paymentMethod:pm });
     document.getElementById('succRn').textContent=rn;
     document.getElementById('formView').style.display='none';
     document.getElementById('succView').style.display='';
-    AP.submitted=true;
-    document.getElementById('apSel').style.display='none';
     document.getElementById('reqNo').value='';
-    renderSigns();
     window.scrollTo({top:0,behavior:'smooth'});
   } catch(e) {
     alert('Failed to submit. Please try again.');
