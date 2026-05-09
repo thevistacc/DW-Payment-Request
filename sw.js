@@ -1,8 +1,53 @@
-const CACHE_NAME = 'dw-payment-v1';
+const CACHE_NAME = 'dw-payment-v2';
+const SHELL_URLS = ['/'];
 
-self.addEventListener('install', e => { self.skipWaiting(); });
-self.addEventListener('activate', e => { e.waitUntil(clients.claim()); });
+// Install: cache app shell
+self.addEventListener('install', e => {
+  self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL_URLS))
+  );
+});
 
+// Activate: clean old caches
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    ).then(() => clients.claim())
+  );
+});
+
+// Fetch: Network-first for API/Supabase/OneSignal, Cache-first for shell
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+
+  // Always network for external APIs
+  if (
+    url.hostname.includes('supabase.co') ||
+    url.hostname.includes('onesignal.com') ||
+    url.hostname.includes('fonts.googleapis.com') ||
+    url.hostname.includes('fonts.gstatic.com') ||
+    url.hostname.includes('placehold.co') ||
+    url.hostname.includes('cdn.onesignal.com')
+  ) return;
+
+  // Network-first for same-origin requests, fallback to cache
+  if (e.request.method === 'GET' && url.origin === self.location.origin) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          // Cache fresh responses
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(e.request).then(cached => cached || caches.match('/')))
+    );
+  }
+});
+
+// Push notifications
 self.addEventListener('push', e => {
   let data = {};
   try { data = e.data.json(); } catch(_) {
