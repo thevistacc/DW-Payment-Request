@@ -208,6 +208,18 @@ table.adt tbody tr:hover{background:var(--stripe)}
 .bno:hover{background:var(--err-bg)}
 .empty{text-align:center;padding:3rem;color:var(--th);font-size:14px}
 /* HISTORY */
+/* SUMMARY BAR */
+.hist-summary{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#1a5fa8,#2e8bc0);border-radius:12px;padding:16px 20px;margin-bottom:1.25rem;flex-wrap:wrap}
+.hist-summary-item{display:flex;flex-direction:column;gap:2px;flex:1;min-width:120px}
+.hist-summary-item:not(:last-child){border-right:1px solid rgba(255,255,255,.2);padding-right:16px}
+.hist-summary-label{font-size:11px;font-weight:600;color:rgba(255,255,255,.7);letter-spacing:.05em;text-transform:uppercase}
+.hist-summary-value{font-size:20px;font-weight:700;color:#fff;font-family:'DM Mono',monospace;line-height:1.2}
+.hist-summary-sub{font-size:11px;color:rgba(255,255,255,.6)}
+/* MONTH TABS */
+.month-tab-wrap{display:flex;align-items:center;gap:8px;margin-bottom:1rem;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.month-tab{font-size:12px;font-weight:600;padding:6px 14px;border-radius:20px;border:1.5px solid var(--bd);background:#fff;color:var(--ts);cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;transition:all .15s;flex-shrink:0}
+.month-tab:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-l)}
+.month-tab.on{background:var(--blue);color:#fff;border-color:var(--blue)}
 .hist-filters{display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap}
 .hf-select{padding:7px 12px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);background:#fff;cursor:pointer}
 .hf-select:focus{outline:none;border-color:var(--bdf)}
@@ -302,6 +314,10 @@ table.adt tbody tr:hover{background:var(--stripe)}
   .abar{flex-direction:column;gap:8px}
   .abar .bghost,.abar .bsub{width:100%;text-align:center;padding:13px;font-size:15px}
   .hist-filters{gap:7px}
+  .hist-summary{padding:12px 14px;gap:10px}
+  .hist-summary-value{font-size:16px}
+  .hist-summary-item:not(:last-child){padding-right:10px}
+  .month-tab{font-size:11px;padding:5px 11px}
   .hf-select{flex:1;min-width:0;font-size:13px;padding:6px 10px}
   .hf-search{font-size:16px;min-width:0}
   .hist-card{border-radius:10px}
@@ -506,6 +522,29 @@ table.adt tbody tr:hover{background:var(--stripe)}
     <div id="tabHist" style="display:none">
       <div class="ph" id="histPageTitle">My Requests</div>
       <div class="ps" id="histPageSub">View submitted payment requests and their approval status</div>
+
+      <!-- MONTH TABS -->
+      <div class="month-tab-wrap" id="monthTabWrap"></div>
+
+      <!-- SUMMARY BAR -->
+      <div class="hist-summary" id="histSummary" style="display:none">
+        <div class="hist-summary-item">
+          <div class="hist-summary-label">Total Amount</div>
+          <div class="hist-summary-value" id="sumTotal">₱ 0.00</div>
+          <div class="hist-summary-sub" id="sumPeriod">All requests</div>
+        </div>
+        <div class="hist-summary-item">
+          <div class="hist-summary-label">Requests</div>
+          <div class="hist-summary-value" id="sumCount">0</div>
+          <div class="hist-summary-sub" id="sumApproved">0 approved</div>
+        </div>
+        <div class="hist-summary-item">
+          <div class="hist-summary-label">Pending</div>
+          <div class="hist-summary-value" id="sumPending">0</div>
+          <div class="hist-summary-sub">awaiting approval</div>
+        </div>
+      </div>
+
       <div class="hist-filters">
         <select class="hf-select" id="hfStatus" onchange="renderHist()">
           <option value="">All Statuses</option>
@@ -658,6 +697,7 @@ let CU = null; // current user object (from DB row, camelCased)
 let RC = 0;
 let AP = { submitted:false, approver:'manjoon', checkedDone:false, approvedDone:false };
 let currentReqId = null;
+let selectedMonth = ''; // '' = all, 'YYYY-MM' = specific month
 
 // Map DB row (snake_case) → app object (camelCase)
 function mapUser(u) {
@@ -809,7 +849,7 @@ function goTab(t) {
     document.getElementById('succView').style.display = 'none';
     if (!document.getElementById('reqNo').value) initForm();
   }
-  if (t==='hist') renderHist();
+  if (t==='hist') { selectedMonth=''; renderHist(); }
   if (t==='admin') renderAdm();
 }
 
@@ -822,8 +862,8 @@ function initForm() {
   document.getElementById('payDate').value = today;
   document.getElementById('prepBy').value = CU.name;
   document.getElementById('prepRole').value = CU.role;
-  document.getElementById('sgnName').textContent = CU.name;
-  document.getElementById('sgnPos').textContent = CU.role;
+  const sgnName = document.getElementById('sgnName'); if(sgnName) sgnName.textContent = CU.name;
+  const sgnPos = document.getElementById('sgnPos'); if(sgnPos) sgnPos.textContent = CU.role;
   document.getElementById('projName').value = 'DW LANDSCAPE CONST & CORP.';
   document.getElementById('reqNo').value = 'REQ-'+today.replace(/-/g,'')+'-'+String(Math.floor(Math.random()*9000)+1000);
   document.getElementById('eBody').innerHTML = '';
@@ -1004,9 +1044,7 @@ async function renderHist() {
     if (!CU.isAdmin) params += `&submitted_by=eq.${CU.id}`;
     const rows = await sbGet('requests', params);
     const reqs = rows.map(mapRequest);
-    const fStatus=document.getElementById('hfStatus').value;
-    const fMethod=document.getElementById('hfMethod').value;
-    const fQ=(document.getElementById('hfQ').value||'').toLowerCase();
+
     if (CU.isAdmin) {
       document.getElementById('histPageTitle').textContent='All Requests';
       document.getElementById('histPageSub').textContent='Showing all submitted payment requests across all users';
@@ -1014,13 +1052,30 @@ async function renderHist() {
       document.getElementById('histPageTitle').textContent='My Requests';
       document.getElementById('histPageSub').textContent='View submitted payment requests and their approval status';
     }
+
+    // Build month tabs from all data (before any filter)
+    buildMonthTabs(reqs);
+
+    const fStatus=document.getElementById('hfStatus').value;
+    const fMethod=document.getElementById('hfMethod').value;
+    const fQ=(document.getElementById('hfQ').value||'').toLowerCase();
+
     const filtered=reqs.filter(r=>{
       const st=getStatus(r);
+      // month filter
+      if(selectedMonth){
+        const ym=(r.submittedAt||r.reqDate||'').slice(0,7);
+        if(ym!==selectedMonth) return false;
+      }
       if(fStatus&&st!==fStatus) return false;
       if(fMethod&&(r.paymentMethod||'cash')!==fMethod) return false;
       if(fQ&&!r.reqNo.toLowerCase().includes(fQ)&&!r.company.toLowerCase().includes(fQ)&&!(r.submittedByName||'').toLowerCase().includes(fQ)) return false;
       return true;
     });
+
+    // Update summary bar
+    updateSummaryBar(filtered);
+
     if(!filtered.length){ list.innerHTML='<div class="empty" style="padding:3rem;text-align:center;color:var(--th)">No requests found.</div>'; return; }
     list.innerHTML=filtered.map(r=>{
       const st=getStatus(r), dt=new Date(r.submittedAt).toLocaleDateString('en-US');
@@ -1055,15 +1110,12 @@ async function renderHist() {
       if(CU.isAdmin && st!=='done' && st!=='denied'){
         const isMj=CU.akey==='manjoon', isSy=CU.akey==='sunyong';
         let approveBtn='', denyBtn='';
-        // Approve (Check) — Checked by for sunyong flow, shown to Manjoon
         if(sy && !r.checkedDone && isMj){
           approveBtn+=`<button class="happ-btn happ-ok" onclick="histCkApprove('${r.id}')">✓ Approve (Check)</button>`;
         }
-        // Approve — Final approval
         if((!sy&&!r.approvedDone&&isMj)||(sy&&r.checkedDone&&!r.approvedDone&&isSy)){
           approveBtn+=`<button class="happ-btn happ-pu" onclick="histApApprove('${r.id}')">✓ Approve</button>`;
         }
-        // Deny — any admin can deny at any stage
         denyBtn=`<button class="happ-btn happ-deny" onclick="histDeny('${r.id}')">✕ Deny</button>`;
         if(approveBtn||denyBtn){
           appBar=`<div class="hist-approve-bar">
@@ -1108,6 +1160,52 @@ async function renderHist() {
     }).join('');
   } catch(e) {
     list.innerHTML='<div class="empty">Failed to load requests. Please refresh.</div>';
+  }
+}
+
+function buildMonthTabs(reqs) {
+  const wrap = document.getElementById('monthTabWrap');
+  // Collect unique YYYY-MM values
+  const monthSet = new Set();
+  reqs.forEach(r => {
+    const ym = (r.submittedAt || r.reqDate || '').slice(0,7);
+    if (ym) monthSet.add(ym);
+  });
+  const months = Array.from(monthSet).sort().reverse();
+
+  let html = `<button class="month-tab ${selectedMonth===''?'on':''}" onclick="selectMonth('')">전체</button>`;
+  months.forEach(ym => {
+    const [y, m] = ym.split('-');
+    const label = `${y}년 ${parseInt(m)}월`;
+    html += `<button class="month-tab ${selectedMonth===ym?'on':''}" onclick="selectMonth('${ym}')">${label}</button>`;
+  });
+  wrap.innerHTML = html;
+}
+
+function selectMonth(ym) {
+  selectedMonth = ym;
+  renderHist();
+}
+
+function updateSummaryBar(filtered) {
+  const bar = document.getElementById('histSummary');
+  if (!filtered) { bar.style.display='none'; return; }
+  bar.style.display = 'flex';
+
+  const total = filtered.reduce((s,r) => s + (r.subtotal||0), 0);
+  const approved = filtered.filter(r => getStatus(r)==='done').length;
+  const pending = filtered.filter(r => ['pending','checking','approving'].includes(getStatus(r))).length;
+
+  document.getElementById('sumTotal').textContent = '₱ ' + total.toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('sumCount').textContent = filtered.length;
+  document.getElementById('sumApproved').textContent = approved + ' approved';
+  document.getElementById('sumPending').textContent = pending;
+
+  if (selectedMonth) {
+    const [y,m] = selectedMonth.split('-');
+    document.getElementById('sumPeriod').textContent = `${y}년 ${parseInt(m)}월`;
+  } else {
+    document.getElementById('sumPeriod').textContent = '전체 기간';
   }
 }
 
