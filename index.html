@@ -871,7 +871,7 @@ async function doLogin() {
     sessionStorage.setItem('dw_session', JSON.stringify(CU));
     launchApp();
   } catch(e) {
-    err.textContent = 'Connection error. Please try again.';
+    err.textContent = 'Connection error: ' + (e.message || e.toString());
     err.style.display = 'block';
   } finally {
     btn.disabled = false; btn.textContent = 'Sign In →';
