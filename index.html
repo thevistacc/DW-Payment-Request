@@ -6,6 +6,17 @@
 <title>DW Landscape — Payment Request Form</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: "710c1678-44fb-4ebc-b074-eaaa5b51b6bb",
+      notifyButton: { enable: false },
+      allowLocalhostAsSecureOrigin: true,
+    });
+  });
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -509,8 +520,33 @@ async function sbDelete(table, match) {
 }
 
 /* ═══════════════════════════════════
-   LOADING HELPERS
+   ONESIGNAL CONFIG
 ═══════════════════════════════════ */
+const OS_APP_ID  = '710c1678-44fb-4ebc-b074-eaaa5b51b6bb';
+const OS_API_KEY = 'os_v2_app_oegbm6ce7nhlzmdu5kvfwunwxouufc2s272eadm3i4doxynf3lf4ldh52g4mtj6jpcfki3ffvk4jxzbk6cm23zpbbwluqjpbd63e5mi';
+
+async function sendPushNotification({ reqNo, company, submittedByName, subtotal, paymentMethod }) {
+  const methodLabel = paymentMethod==='check'?'Check':paymentMethod==='transfer'?'Bank Transfer':'Cash';
+  try {
+    await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${OS_API_KEY}`
+      },
+      body: JSON.stringify({
+        app_id: OS_APP_ID,
+        included_segments: ['All'],          // send to all subscribed devices
+        headings: { en: `New Payment Request — ${reqNo}` },
+        contents: { en: `${submittedByName} · ${company} · ₱${Number(subtotal).toLocaleString('en-PH',{minimumFractionDigits:2})} · ${methodLabel}` },
+        url: 'https://dw-payment-request.vercel.app',
+        web_buttons: [{ id:'view', text:'View Request', url:'https://dw-payment-request.vercel.app' }]
+      })
+    });
+  } catch(e) {
+    console.warn('Push notification failed (non-critical):', e);
+  }
+}
 function showLoading(msg='Loading…') {
   document.getElementById('loadingMsg').textContent = msg;
   document.getElementById('loadingOverlay').classList.add('on');
@@ -869,6 +905,8 @@ async function submitForm() {
       checked_done:false, approved_done:false
     });
     currentReqId=reqId;
+    // Send push notification to all subscribed devices (non-blocking)
+    sendPushNotification({ reqNo:rn, company:co, submittedByName:CU.name, subtotal:sub, paymentMethod:pm });
     document.getElementById('succRn').textContent=rn;
     document.getElementById('formView').style.display='none';
     document.getElementById('succView').style.display='';
