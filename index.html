@@ -235,6 +235,9 @@ table.adt tbody tr:hover{background:var(--stripe)}
 .hist-title{font-size:14px;font-weight:600;color:var(--text)}
 .hist-meta{font-size:12px;color:var(--ts);margin-top:2px}
 .hist-right{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:12px}
+.hist-paydate{display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex-shrink:0}
+.hist-paydate-label{font-size:10px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase}
+.hist-paydate-val{font-size:13px;font-weight:600;color:var(--blue);font-family:'DM Mono',monospace}
 .hist-amount{font-size:14px;font-weight:600;color:var(--text);font-family:'DM Mono',monospace}
 .chevron{font-size:12px;color:var(--th);transition:transform .2s}
 .chevron.open{transform:rotate(180deg)}
@@ -329,6 +332,8 @@ table.adt tbody tr:hover{background:var(--stripe)}
   .hist-title{font-size:13px}
   .hist-meta{font-size:11px}
   .hist-amount{font-size:13px}
+  .hist-paydate-val{font-size:12px}
+  .hist-paydate-label{font-size:9px}
   .hist-body{padding:12px 14px}
   .hdet-grid{grid-template-columns:1fr 1fr!important;gap:8px}
   .hdet-item label{font-size:9px}
@@ -810,7 +815,7 @@ function doLogout() {
 /* ═══════════════════════════════════
    LAUNCH APP
 ═══════════════════════════════════ */
-function launchApp() {
+async function launchApp() {
   ['scrLogin','scrSignup','scrPending'].forEach(s => {
     document.getElementById(s).classList.remove('on');
     document.getElementById(s).style.display = '';
@@ -831,13 +836,13 @@ function launchApp() {
     } catch(e) { /* ignore */ }
   }, 2000);
   goTab('form');
-  initForm();
+  await initForm();
 }
 
 /* ═══════════════════════════════════
    TABS
 ═══════════════════════════════════ */
-function goTab(t) {
+async function goTab(t) {
   ['Form','Hist','Admin'].forEach(n => {
     document.getElementById('tb'+n)?.classList.remove('on');
     const el = document.getElementById('tab'+n); if(el) el.style.display='none';
@@ -848,7 +853,7 @@ function goTab(t) {
   if (t==='form') {
     document.getElementById('formView').style.display = '';
     document.getElementById('succView').style.display = 'none';
-    if (!document.getElementById('reqNo').value) initForm();
+    if (!document.getElementById('reqNo').value) await initForm();
   }
   if (t==='hist') { selectedMonth=''; renderHist(); }
   if (t==='admin') renderAdm();
@@ -857,7 +862,24 @@ function goTab(t) {
 /* ═══════════════════════════════════
    INIT FORM
 ═══════════════════════════════════ */
-function initForm() {
+async function getNextReqNo() {
+  const today = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const prefix = `REQ-${today}-`;
+  try {
+    const rows = await sbGet('requests', `order=req_no.desc&limit=1&req_no=like.${encodeURIComponent(prefix)}*`);
+    if (rows.length) {
+      const last = rows[0].req_no; // e.g. "REQ-20250509-0003"
+      const match = last.match(/REQ-\d{8}-(\d+)/);
+      if (match) {
+        const next = parseInt(match[1], 10) + 1;
+        return prefix + String(next).padStart(4, '0');
+      }
+    }
+  } catch(e) { /* fallback below */ }
+  return prefix + '0001';
+}
+
+async function initForm() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('reqDate').value = today;
   document.getElementById('payDate').value = today;
@@ -866,13 +888,15 @@ function initForm() {
   const sgnName = document.getElementById('sgnName'); if(sgnName) sgnName.textContent = CU.name;
   const sgnPos = document.getElementById('sgnPos'); if(sgnPos) sgnPos.textContent = CU.role;
   document.getElementById('projName').value = 'DW LANDSCAPE CONST & CORP.';
-  document.getElementById('reqNo').value = 'REQ-'+today.replace(/-/g,'')+'-'+String(Math.floor(Math.random()*9000)+1000);
+  document.getElementById('reqNo').value = 'Loading…';
   document.getElementById('eBody').innerHTML = '';
   RC = 0; addRow(); addRow(); addRow();
   ['purp','coName','tin','bnk','acno','acnm','addr'].forEach(id => { document.getElementById(id).value=''; });
   document.getElementById('payMethod').value = 'cash';
   updateSt();
   AP = { submitted:false, approver:'manjoon', checkedDone:false, approvedDone:false };
+  // Fetch next sequential number from DB
+  document.getElementById('reqNo').value = await getNextReqNo();
 }
 
 /* ═══════════════════════════════════
@@ -948,7 +972,7 @@ function renderProgress() {
 /* ═══════════════════════════════════
    SUBMIT / RESET
 ═══════════════════════════════════ */
-function resetForm() { if(confirm('Reset all form fields?')) initForm(); }
+async function resetForm() { if(confirm('Reset all form fields?')) await initForm(); }
 
 async function submitForm() {
   const rd=document.getElementById('reqDate').value;
@@ -1002,11 +1026,11 @@ async function submitForm() {
   }
 }
 
-function newForm() {
+async function newForm() {
   currentReqId=null;
   document.getElementById('formView').style.display='';
   document.getElementById('succView').style.display='none';
-  initForm();
+  await initForm();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -1132,13 +1156,14 @@ async function renderHist() {
       return `<div class="hist-card" style="${cardStyle}">
         <div class="hist-head" onclick="toggleHist('hb${r.id}','hc${r.id}')">
           <div class="hist-left">
-            <span class="hist-reqno">${r.reqNo}</span>
             <div>
               <div class="hist-title">${r.company}${byLine}${checkIndicator}</div>
-              <div class="hist-meta">${r.purpose.slice(0,55)}${r.purpose.length>55?'…':''} · ${dt}</div>
+              <div class="hist-meta">${r.purpose.slice(0,55)}${r.purpose.length>55?'…':''} · 제출 ${dt}</div>
             </div>
           </div>
-          <div class="hist-right">${pmTag}${stag}<span class="hist-amount">${sub}</span><span class="chevron" id="hc${r.id}">▼</span></div>
+          <div class="hist-right">
+            <div class="hist-paydate"><span class="hist-paydate-label">결제예정</span><span class="hist-paydate-val">${r.payDate}</span></div>
+            ${pmTag}${stag}<span class="hist-amount">${sub}</span><span class="chevron" id="hc${r.id}">▼</span></div>
         </div>
         <div class="hist-body" id="hb${r.id}">
           ${progH}
