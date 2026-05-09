@@ -6,8 +6,24 @@
     { "src": "app.webmanifest", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/sw.js", "dest": "/sw.js" },
-    { "src": "/app.webmanifest", "dest": "/app.webmanifest" },
+    {
+      "src": "/sw.js",
+      "dest": "/sw.js",
+      "headers": {
+        "Service-Worker-Allowed": "/",
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "src": "/app.webmanifest",
+      "dest": "/app.webmanifest",
+      "headers": { "Content-Type": "application/manifest+json" }
+    },
+    {
+      "src": "/manifest.json",
+      "dest": "/app.webmanifest",
+      "headers": { "Content-Type": "application/manifest+json" }
+    },
     { "src": "/", "dest": "/index.html" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
