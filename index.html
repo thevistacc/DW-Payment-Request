@@ -404,7 +404,13 @@ table.adt tbody tr:hover{background:var(--stripe)}
       <div class="f"><label>Position <span style="color:var(--err)">*</span></label><input type="text" id="rRole" placeholder="e.g. Staff, Manager" /></div>
     </div>
     <div class="f"><label>Email (Login ID) <span style="color:var(--err)">*</span></label><input type="email" id="rEmail" placeholder="example@dw.com" /></div>
-    <div class="f"><label>Password <span style="color:var(--err)">*</span></label><input type="password" id="rPw" placeholder="At least 6 characters" /></div>
+    <div class="f"><label>Password <span style="color:var(--err)">*</span></label><input type="password" id="rPw" placeholder="Min 8 chars, upper, lower, number" oninput="updatePwStrength()" /></div>
+    <div id="pwStrengthWrap" style="margin:-6px 0 10px;display:none">
+      <div style="height:4px;background:var(--bd);border-radius:4px;overflow:hidden;margin-bottom:4px">
+        <div id="pwStrengthBar" style="height:100%;width:0%;border-radius:4px;transition:width .25s,background .25s"></div>
+      </div>
+      <span id="pwStrengthLabel" style="font-size:11px;font-weight:600"></span>
+    </div>
     <div class="f" style="margin-bottom:0"><label>Confirm Password <span style="color:var(--err)">*</span></label><input type="password" id="rPw2" placeholder="Re-enter password" /></div>
     <div class="emsg" id="rErr"></div>
     <button class="bp" id="rBtn" onclick="doSignup()">Submit Request</button>
@@ -715,11 +721,59 @@ function hideLoading() {
 /* ═══════════════════════════════════
    STATE
 ═══════════════════════════════════ */
-let CU = null; // current user object (from DB row, camelCased)
+let CU = null;
 let RC = 0;
 let AP = { submitted:false, approver:'manjoon', checkedDone:false, approvedDone:false };
 let currentReqId = null;
-let selectedMonth = ''; // '' = all, 'YYYY-MM' = specific month
+let selectedMonth = '';
+
+/* ═══════════════════════════════════
+   ⑦ RATE LIMITING — login attempts
+═══════════════════════════════════ */
+const RATE_KEY = 'dw_login_attempts';
+const RATE_MAX = 5;
+const RATE_WINDOW = 15 * 60 * 1000; // 15 minutes
+
+function getRateData() {
+  try { return JSON.parse(sessionStorage.getItem(RATE_KEY)) || { count:0, since:Date.now() }; }
+  catch(_) { return { count:0, since:Date.now() }; }
+}
+function recordFailedAttempt() {
+  const d = getRateData();
+  if (Date.now() - d.since > RATE_WINDOW) { d.count = 1; d.since = Date.now(); }
+  else d.count++;
+  sessionStorage.setItem(RATE_KEY, JSON.stringify(d));
+  return d.count;
+}
+function isRateLimited() {
+  const d = getRateData();
+  if (Date.now() - d.since > RATE_WINDOW) { sessionStorage.removeItem(RATE_KEY); return false; }
+  return d.count >= RATE_MAX;
+}
+function clearRateLimit() { sessionStorage.removeItem(RATE_KEY); }
+function rateLimitSecondsLeft() {
+  const d = getRateData();
+  return Math.ceil((RATE_WINDOW - (Date.now() - d.since)) / 1000);
+}
+
+/* ═══════════════════════════════════
+   ⑥ PASSWORD STRENGTH VALIDATION
+═══════════════════════════════════ */
+function validatePassword(pw) {
+  const errors = [];
+  if (pw.length < 8) errors.push('at least 8 characters');
+  if (!/[A-Z]/.test(pw)) errors.push('one uppercase letter');
+  if (!/[a-z]/.test(pw)) errors.push('one lowercase letter');
+  if (!/[0-9]/.test(pw)) errors.push('one number');
+  return errors;
+}
+function getStrengthLabel(pw) {
+  const score = [pw.length>=8, /[A-Z]/.test(pw), /[a-z]/.test(pw), /[0-9]/.test(pw), /[^A-Za-z0-9]/.test(pw), pw.length>=12].filter(Boolean).length;
+  if (score <= 2) return { label:'Weak', color:'var(--err)', pct:25 };
+  if (score <= 3) return { label:'Fair', color:'var(--warn)', pct:50 };
+  if (score <= 4) return { label:'Good', color:'#2e8bc0', pct:75 };
+  return { label:'Strong', color:'var(--ok)', pct:100 };
+}
 
 // Map DB row (snake_case) → app object (camelCase)
 function mapUser(u) {
@@ -763,17 +817,37 @@ async function doLogin() {
   const err = document.getElementById('lErr');
   const btn = document.getElementById('lBtn');
   if (!id || !pw) { err.textContent='Please enter your email/name and password.'; err.style.display='block'; return; }
+
+  // ⑦ Rate limit check
+  if (isRateLimited()) {
+    const secs = rateLimitSecondsLeft();
+    const mins = Math.ceil(secs / 60);
+    err.textContent = `Too many failed attempts. Please wait ${mins} minute${mins>1?'s':''} before trying again.`;
+    err.style.display = 'block';
+    return;
+  }
+
   err.style.display = 'none';
   btn.disabled = true; btn.textContent = 'Signing in…';
   try {
-    // try email match first, then name
     let rows = await sbGet('users', `email=eq.${encodeURIComponent(id)}&pw=eq.${encodeURIComponent(pw)}`);
     if (!rows.length) rows = await sbGet('users', `name=eq.${encodeURIComponent(id)}&pw=eq.${encodeURIComponent(pw)}`);
-    if (!rows.length) { err.textContent='Incorrect email/name or password.'; err.style.display='block'; return; }
+    if (!rows.length) {
+      const attempts = recordFailedAttempt();
+      const remaining = RATE_MAX - attempts;
+      err.textContent = remaining > 0
+        ? `Incorrect email/name or password. ${remaining} attempt${remaining>1?'s':''} remaining.`
+        : `Too many failed attempts. Please wait ${Math.ceil(RATE_WINDOW/60000)} minutes before trying again.`;
+      err.style.display='block';
+      return;
+    }
     const u = mapUser(rows[0]);
     if (u.status === 'pending') { goAuth('scrPending'); return; }
     if (u.status === 'rejected') { err.textContent='Your account request was rejected. Please contact an administrator.'; err.style.display='block'; return; }
+    clearRateLimit();
     CU = u;
+    // ⑤ Persist session
+    sessionStorage.setItem('dw_session', JSON.stringify(CU));
     launchApp();
   } catch(e) {
     err.textContent = 'Connection error. Please try again.';
@@ -798,7 +872,9 @@ async function doSignup() {
   const show  = m => { err.textContent=m; err.style.display='block'; };
   if (!name||!role||!email||!pw) { show('Please fill in all required fields.'); return; }
   if (pw !== pw2) { show('Passwords do not match.'); return; }
-  if (pw.length < 6) { show('Password must be at least 6 characters.'); return; }
+  // ⑥ Password strength
+  const pwErrors = validatePassword(pw);
+  if (pwErrors.length) { show('Password must include: ' + pwErrors.join(', ') + '.'); return; }
   err.style.display = 'none';
   btn.disabled = true; btn.textContent = 'Submitting…';
   try {
@@ -822,6 +898,8 @@ async function doSignup() {
 ═══════════════════════════════════ */
 function doLogout() {
   CU = null;
+  // ⑤ Clear session
+  sessionStorage.removeItem('dw_session');
   document.getElementById('app').style.display = 'none';
   ['lId','lPw'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('lErr').style.display = 'none';
@@ -1357,12 +1435,15 @@ async function doChangePw(){
   err.style.display='none'; ok.style.display='none';
   if(!old||!nw||!nw2){ err.textContent='Please fill in all fields.'; err.style.display='block'; return; }
   if(old!==CU.pw){ err.textContent='Current password is incorrect.'; err.style.display='block'; return; }
-  if(nw.length<6){ err.textContent='New password must be at least 6 characters.'; err.style.display='block'; return; }
+  // ⑥ Password strength on change
+  const pwErrors = validatePassword(nw);
+  if(pwErrors.length){ err.textContent='New password must include: '+pwErrors.join(', ')+'.'; err.style.display='block'; return; }
   if(nw!==nw2){ err.textContent='New passwords do not match.'; err.style.display='block'; return; }
   btn.disabled=true; btn.textContent='Saving…';
   try {
     await sbPatch('users',{id:CU.id},{pw:nw});
     CU.pw=nw;
+    sessionStorage.setItem('dw_session', JSON.stringify(CU)); // ⑤ keep session fresh
     ['pwOld','pwNew','pwNew2'].forEach(id=>{ document.getElementById(id).value=''; });
     ok.textContent='Password changed successfully.'; ok.style.display='block';
     setTimeout(closePwModal,1800);
@@ -1372,6 +1453,38 @@ async function doChangePw(){
     btn.disabled=false; btn.textContent='Save New Password';
   }
 }
+/* ⑤ Restore session on page load */
+window.addEventListener('DOMContentLoaded', async function() {
+  try {
+    const saved = sessionStorage.getItem('dw_session');
+    if (!saved) return;
+    const u = JSON.parse(saved);
+    if (!u || !u.id) return;
+    const rows = await sbGet('users', `id=eq.${encodeURIComponent(u.id)}`);
+    if (!rows.length) { sessionStorage.removeItem('dw_session'); return; }
+    const fresh = mapUser(rows[0]);
+    if (fresh.status !== 'approved' && !fresh.isAdmin) { sessionStorage.removeItem('dw_session'); return; }
+    CU = fresh;
+    sessionStorage.setItem('dw_session', JSON.stringify(CU));
+    await launchApp();
+  } catch(_) { sessionStorage.removeItem('dw_session'); }
+});
+
+/* ⑥ Password strength meter */
+function updatePwStrength() {
+  const pw = document.getElementById('rPw').value;
+  const wrap = document.getElementById('pwStrengthWrap');
+  const bar  = document.getElementById('pwStrengthBar');
+  const lbl  = document.getElementById('pwStrengthLabel');
+  if (!pw) { wrap.style.display='none'; return; }
+  wrap.style.display = 'block';
+  const s = getStrengthLabel(pw);
+  bar.style.width = s.pct + '%';
+  bar.style.background = s.color;
+  lbl.style.color = s.color;
+  lbl.textContent = s.label;
+}
+
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePwModal(); });
 </script>
 </body>
