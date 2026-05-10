@@ -707,12 +707,12 @@ async function sbDelete(table, match) {
    ONESIGNAL CONFIG
 ═══════════════════════════════════ */
 const OS_APP_ID  = '710c1678-44fb-4ebc-b074-eaaa5b51b6bb';
-const OS_API_KEY = 'os_v2_app_oegbm6ce7nhlzmdu5kvfwunwxouufc2s272eadm3i4doxynf3lf4ldh52g4mtj6jpcfki3ffvk4jxzbk6cm23zpbbwluqjpbd63e5mi';
+const OS_API_KEY = 'os_v2_app_oegbm6ce7nhlzmdu5kvfwunwxoqopalizmyub6voaulenthcmxysdwmb2qpqbldel5vfc23fg6i3hgq2pmktais5h4mvlwuq4apg3aa';
 
 async function sendPushNotification({ reqNo, company, submittedByName, subtotal, paymentMethod }) {
   const methodLabel = paymentMethod==='check'?'Check':paymentMethod==='transfer'?'Bank Transfer':'Cash';
   try {
-    await fetch('https://onesignal.com/api/v1/notifications', {
+    const res = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -720,15 +720,21 @@ async function sendPushNotification({ reqNo, company, submittedByName, subtotal,
       },
       body: JSON.stringify({
         app_id: OS_APP_ID,
-        included_segments: ['All'],          // send to all subscribed devices
+        included_segments: ['All'],
         headings: { en: `New Payment Request — ${reqNo}` },
         contents: { en: `${submittedByName} · ${company} · ₱${Number(subtotal).toLocaleString('en-PH',{minimumFractionDigits:2})} · ${methodLabel}` },
         url: 'https://dw-payment-request.vercel.app',
         web_buttons: [{ id:'view', text:'View Request', url:'https://dw-payment-request.vercel.app' }]
       })
     });
+    const data = await res.json();
+    if (!res.ok || data.errors) {
+      console.error('OneSignal error:', JSON.stringify(data));
+    } else {
+      console.log('Push sent OK:', data.id, '| recipients:', data.recipients);
+    }
   } catch(e) {
-    console.warn('Push notification failed (non-critical):', e);
+    console.warn('Push notification failed:', e);
   }
 }
 function showLoading(msg='Loading…') {
