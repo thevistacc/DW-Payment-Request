@@ -29,8 +29,9 @@
       appId: "710c1678-44fb-4ebc-b074-eaaa5b51b6bb",
       notifyButton: { enable: false },
       allowLocalhostAsSecureOrigin: true,
+      serviceWorkerParam: { scope: '/' },
+      serviceWorkerPath: 'sw.js',
     });
-    // Prompt for push permission after user logs in (called from launchApp)
     window._oneSignalReady = true;
   });
 </script>
@@ -376,6 +377,17 @@ table.adt tbody tr:hover{background:var(--stripe)}
 <div class="loading-overlay" id="loadingOverlay">
   <div class="spinner"></div>
   <div class="loading-msg" id="loadingMsg">Loading…</div>
+</div>
+
+<!-- PUSH PERMISSION BANNER -->
+<div id="pushBanner" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:150;background:#1a1a2e;color:#fff;border-radius:14px;padding:14px 18px;display:none;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(10,30,60,.3);max-width:340px;width:calc(100% - 32px)">
+  <span style="font-size:22px">🔔</span>
+  <div style="flex:1;min-width:0">
+    <div style="font-size:13px;font-weight:600;margin-bottom:2px">Enable Notifications</div>
+    <div style="font-size:11px;color:rgba(255,255,255,.65)">Get notified when requests are approved</div>
+  </div>
+  <button onclick="enablePush()" style="background:var(--blue);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap">Allow</button>
+  <button onclick="document.getElementById('pushBanner').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer;padding:0;line-height:1">✕</button>
 </div>
 
 <!-- LOGIN -->
@@ -819,8 +831,27 @@ function mapRequest(r) {
 }
 
 /* ═══════════════════════════════════
-   AUTH ROUTING
+   PUSH PERMISSION
 ═══════════════════════════════════ */
+async function promptPushPermission() {
+  try {
+    if (!window.OneSignal) return;
+    const permission = await OneSignal.Notifications.permissionNative;
+    // Already granted or denied — don't show banner
+    if (permission === 'granted') return;
+    if (permission === 'denied') return;
+    // Show banner for user to tap (iOS requires gesture)
+    const banner = document.getElementById('pushBanner');
+    banner.style.display = 'flex';
+  } catch(e) { console.warn('Push prompt error:', e); }
+}
+
+async function enablePush() {
+  document.getElementById('pushBanner').style.display = 'none';
+  try {
+    await OneSignal.Notifications.requestPermission();
+  } catch(e) { console.warn('Push permission error:', e); }
+}
 function goAuth(id) {
   ['scrLogin','scrSignup','scrPending'].forEach(s => {
     document.getElementById(s).classList.remove('on');
@@ -948,14 +979,8 @@ async function launchApp() {
   document.getElementById('aBadge').style.display = CU.isAdmin ? '' : 'none';
   document.getElementById('tbAdmin').style.display = CU.isAdmin ? '' : 'none';
   document.getElementById('tbHist').textContent = CU.isAdmin ? 'All Requests' : 'My Requests';
-  // Request push notification permission after login
-  setTimeout(() => {
-    try {
-      if (window.OneSignal) {
-        OneSignal.Notifications.requestPermission();
-      }
-    } catch(e) { /* ignore */ }
-  }, 2000);
+  // iOS requires user gesture for notification permission — show banner instead
+  setTimeout(() => promptPushPermission(), 1500);
   goTab('form');
   await initForm();
 }
