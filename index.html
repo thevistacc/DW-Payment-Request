@@ -29,9 +29,8 @@
       appId: "710c1678-44fb-4ebc-b074-eaaa5b51b6bb",
       notifyButton: { enable: false },
       allowLocalhostAsSecureOrigin: true,
-      serviceWorkerParam: { scope: '/' },
-      serviceWorkerPath: 'sw.js',
     });
+    // Prompt for push permission after user logs in (called from launchApp)
     window._oneSignalReady = true;
   });
 </script>
@@ -379,17 +378,6 @@ table.adt tbody tr:hover{background:var(--stripe)}
   <div class="loading-msg" id="loadingMsg">Loading…</div>
 </div>
 
-<!-- PUSH PERMISSION BANNER -->
-<div id="pushBanner" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:150;background:#1a1a2e;color:#fff;border-radius:14px;padding:14px 18px;display:none;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(10,30,60,.3);max-width:340px;width:calc(100% - 32px)">
-  <span style="font-size:22px">🔔</span>
-  <div style="flex:1;min-width:0">
-    <div style="font-size:13px;font-weight:600;margin-bottom:2px">Enable Notifications</div>
-    <div style="font-size:11px;color:rgba(255,255,255,.65)">Get notified when requests are approved</div>
-  </div>
-  <button onclick="enablePush()" style="background:var(--blue);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap">Allow</button>
-  <button onclick="document.getElementById('pushBanner').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer;padding:0;line-height:1">✕</button>
-</div>
-
 <!-- LOGIN -->
 <div id="scrLogin" class="auth-wrap on">
   <div class="ac">
@@ -678,7 +666,7 @@ table.adt tbody tr:hover{background:var(--stripe)}
       </select>
     </div>
     <div class="f" style="margin-bottom:0"><label>Bank / Account Info</label>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
         <input type="text" id="editBank" placeholder="Bank name" style="padding:9px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
         <input type="text" id="editAcno" placeholder="Account number" style="padding:9px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
         <input type="text" id="editAcnm" placeholder="Account name" style="padding:9px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
@@ -756,12 +744,12 @@ async function sbDelete(table, match) {
    ONESIGNAL CONFIG
 ═══════════════════════════════════ */
 const OS_APP_ID  = '710c1678-44fb-4ebc-b074-eaaa5b51b6bb';
-const OS_API_KEY = 'os_v2_app_oegbm6ce7nhlzmdu5kvfwunwxoqopalizmyub6voaulenthcmxysdwmb2qpqbldel5vfc23fg6i3hgq2pmktais5h4mvlwuq4apg3aa';
+const OS_API_KEY = 'os_v2_app_oegbm6ce7nhlzmdu5kvfwunwxouufc2s272eadm3i4doxynf3lf4ldh52g4mtj6jpcfki3ffvk4jxzbk6cm23zpbbwluqjpbd63e5mi';
 
 async function sendPushNotification({ reqNo, company, submittedByName, subtotal, paymentMethod }) {
   const methodLabel = paymentMethod==='check'?'Check':paymentMethod==='transfer'?'Bank Transfer':'Cash';
   try {
-    const res = await fetch('https://onesignal.com/api/v1/notifications', {
+    await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -769,21 +757,15 @@ async function sendPushNotification({ reqNo, company, submittedByName, subtotal,
       },
       body: JSON.stringify({
         app_id: OS_APP_ID,
-        included_segments: ['All'],
+        included_segments: ['All'],          // send to all subscribed devices
         headings: { en: `New Payment Request — ${reqNo}` },
         contents: { en: `${submittedByName} · ${company} · ₱${Number(subtotal).toLocaleString('en-PH',{minimumFractionDigits:2})} · ${methodLabel}` },
         url: 'https://dw-payment-request.vercel.app',
         web_buttons: [{ id:'view', text:'View Request', url:'https://dw-payment-request.vercel.app' }]
       })
     });
-    const data = await res.json();
-    if (!res.ok || data.errors) {
-      console.error('OneSignal error:', JSON.stringify(data));
-    } else {
-      console.log('Push sent OK:', data.id, '| recipients:', data.recipients);
-    }
   } catch(e) {
-    console.warn('Push notification failed:', e);
+    console.warn('Push notification failed (non-critical):', e);
   }
 }
 function showLoading(msg='Loading…') {
@@ -868,32 +850,8 @@ function mapRequest(r) {
 }
 
 /* ═══════════════════════════════════
-   PUSH PERMISSION
+   AUTH ROUTING
 ═══════════════════════════════════ */
-async function promptPushPermission() {
-  try {
-    if (!window.OneSignal) { console.warn('OneSignal not loaded'); return; }
-    const permission = await OneSignal.Notifications.permissionNative;
-    console.log('Push permission status:', permission);
-    if (permission === 'granted') { console.log('Already granted'); return; }
-    if (permission === 'denied') { console.log('Already denied — user must enable in settings'); return; }
-    const banner = document.getElementById('pushBanner');
-    banner.style.display = 'flex';
-  } catch(e) { console.warn('Push prompt error:', e); }
-}
-
-async function enablePush() {
-  document.getElementById('pushBanner').style.display = 'none';
-  try {
-    console.log('Requesting push permission...');
-    const result = await OneSignal.Notifications.requestPermission();
-    console.log('Permission result:', result);
-    const isPushEnabled = await OneSignal.User.PushSubscription.optedIn;
-    console.log('Opted in:', isPushEnabled);
-    const subId = await OneSignal.User.PushSubscription.id;
-    console.log('Subscription ID:', subId);
-  } catch(e) { console.warn('Push permission error:', e.message || e); }
-}
 function goAuth(id) {
   ['scrLogin','scrSignup','scrPending'].forEach(s => {
     document.getElementById(s).classList.remove('on');
@@ -950,7 +908,7 @@ async function doLogin() {
     sessionStorage.setItem('dw_session', JSON.stringify(CU));
     launchApp();
   } catch(e) {
-    err.textContent = 'Connection error: ' + (e.message || e.toString());
+    err.textContent = 'Connection error. Please try again.';
     err.style.display = 'block';
   } finally {
     btn.disabled = false; btn.textContent = 'Sign In →';
@@ -1021,8 +979,14 @@ async function launchApp() {
   document.getElementById('aBadge').style.display = CU.isAdmin ? '' : 'none';
   document.getElementById('tbAdmin').style.display = CU.isAdmin ? '' : 'none';
   document.getElementById('tbHist').textContent = CU.isAdmin ? 'All Requests' : 'My Requests';
-  // iOS requires user gesture for notification permission — show banner instead
-  setTimeout(() => promptPushPermission(), 1500);
+  // Request push notification permission after login
+  setTimeout(() => {
+    try {
+      if (window.OneSignal) {
+        OneSignal.Notifications.requestPermission();
+      }
+    } catch(e) { /* ignore */ }
+  }, 2000);
   goTab('form');
   await initForm();
 }
@@ -1319,7 +1283,6 @@ async function renderHist() {
         <td class="r">${it.vat?'₱ '+parseFloat(it.vat).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}):''}</td>
         <td class="r">${it.tot?'₱ '+parseFloat(it.tot).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}):''}</td>
       </tr>`).join('');
-      // Build action bar
       let approveBtn='', denyBtn='', statusLine='';
       if(CU.isAdmin){
         if(st!=='done' && st!=='denied'){
@@ -1337,11 +1300,11 @@ async function renderHist() {
       }
       let appBar='';
       if(CU.isAdmin){
-        const leftBtns = approveBtn||denyBtn||statusLine
+        const leftSide = (approveBtn||denyBtn||statusLine)
           ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:12px;color:var(--ts)">Actions:</span>${approveBtn}${denyBtn}${statusLine}</div>`
-          : '<div></div>';
+          : `<div></div>`;
         appBar=`<div class="hist-approve-bar" style="justify-content:space-between">
-          ${leftBtns}
+          ${leftSide}
           <div style="display:flex;gap:6px">
             <button class="happ-btn" style="background:var(--stripe);color:var(--ts);border:1.5px solid var(--bd)" onclick="openEditRequest('${r.id}')">✎ Edit</button>
             <button class="happ-btn happ-deny" onclick="deleteRequest('${r.id}')">🗑 Delete</button>
@@ -1451,28 +1414,28 @@ async function histDeny(id){
 }
 
 async function deleteRequest(id) {
-  if (!confirm('Delete this request? This cannot be undone.')) return;
+  if(!confirm('Delete this request? This cannot be undone.')) return;
   await sbDelete('requests', {id});
   renderHist();
 }
 
 async function openEditRequest(id) {
   const rows = await sbGet('requests', `id=eq.${id}`);
-  if (!rows.length) return;
+  if(!rows.length) return;
   const r = mapRequest(rows[0]);
   document.getElementById('editReqId').value = r.id;
   document.getElementById('editReqNo').textContent = r.reqNo;
-  document.getElementById('editCoName').value = r.company || '';
-  document.getElementById('editPurpose').value = r.purpose || '';
-  document.getElementById('editReqDate').value = r.reqDate || '';
-  document.getElementById('editPayDate').value = r.payDate || '';
-  document.getElementById('editPayMethod').value = r.paymentMethod || 'cash';
-  document.getElementById('editBank').value = r.bank || '';
-  document.getElementById('editAcno').value = r.acno || '';
-  document.getElementById('editAcnm').value = r.acnm || '';
-  document.getElementById('editTin').value = r.tin || '';
-  document.getElementById('editReqErr').style.display = 'none';
-  document.getElementById('editReqOk').style.display = 'none';
+  document.getElementById('editCoName').value = r.company||'';
+  document.getElementById('editPurpose').value = r.purpose||'';
+  document.getElementById('editReqDate').value = r.reqDate||'';
+  document.getElementById('editPayDate').value = r.payDate||'';
+  document.getElementById('editPayMethod').value = r.paymentMethod||'cash';
+  document.getElementById('editBank').value = r.bank||'';
+  document.getElementById('editAcno').value = r.acno||'';
+  document.getElementById('editAcnm').value = r.acnm||'';
+  document.getElementById('editTin').value = r.tin||'';
+  document.getElementById('editReqErr').style.display='none';
+  document.getElementById('editReqOk').style.display='none';
   document.getElementById('editReqModal').classList.add('on');
 }
 
@@ -1486,31 +1449,29 @@ async function saveEditRequest() {
   const err = document.getElementById('editReqErr');
   const ok  = document.getElementById('editReqOk');
   const btn = document.getElementById('editReqBtn');
-  err.style.display = 'none'; ok.style.display = 'none';
-  if (!co || !pu || !rd || !pd) { err.textContent='Company, purpose, and dates are required.'; err.style.display='block'; return; }
-  btn.disabled = true; btn.textContent = 'Saving…';
+  err.style.display='none'; ok.style.display='none';
+  if(!co||!pu||!rd||!pd){ err.textContent='Company, purpose, and dates are required.'; err.style.display='block'; return; }
+  btn.disabled=true; btn.textContent='Saving…';
   try {
-    await sbPatch('requests', {id}, {
-      company: co, purpose: pu, req_date: rd, pay_date: pd,
-      payment_method: pm,
-      bank: document.getElementById('editBank').value,
-      acno: document.getElementById('editAcno').value,
-      acnm: document.getElementById('editAcnm').value,
-      tin:  document.getElementById('editTin').value,
+    await sbPatch('requests',{id},{
+      company:co, purpose:pu, req_date:rd, pay_date:pd,
+      payment_method:pm,
+      bank:document.getElementById('editBank').value,
+      acno:document.getElementById('editAcno').value,
+      acnm:document.getElementById('editAcnm').value,
+      tin:document.getElementById('editTin').value,
     });
-    ok.textContent = 'Saved successfully.';
-    ok.style.display = 'block';
-    setTimeout(() => { closeEditReq(); renderHist(); }, 1200);
+    ok.textContent='Saved successfully.'; ok.style.display='block';
+    setTimeout(()=>{ closeEditReq(); renderHist(); }, 1200);
   } catch(e) {
-    err.textContent = 'Failed to save. Please try again.';
-    err.style.display = 'block';
+    err.textContent='Failed to save. Please try again.'; err.style.display='block';
   } finally {
-    btn.disabled = false; btn.textContent = 'Save Changes';
+    btn.disabled=false; btn.textContent='Save Changes';
   }
 }
 
-function closeEditReq() { document.getElementById('editReqModal').classList.remove('on'); }
-function closeEditReqBg(e) { if(e.target===document.getElementById('editReqModal')) closeEditReq(); }
+function closeEditReq(){ document.getElementById('editReqModal').classList.remove('on'); }
+function closeEditReqBg(e){ if(e.target===document.getElementById('editReqModal')) closeEditReq(); }
 
 /* ═══════════════════════════════════
    ADMIN TABLE
