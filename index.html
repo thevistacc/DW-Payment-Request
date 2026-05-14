@@ -657,6 +657,43 @@ table.adt tbody tr:hover{background:var(--stripe)}
   </div>
 </div>
 
+<!-- EDIT REQUEST MODAL -->
+<div class="modal-backdrop" id="editReqModal" onclick="closeEditReqBg(event)">
+  <div class="modal" style="max-width:520px;max-height:90vh;overflow-y:auto">
+    <button class="modal-close" onclick="closeEditReq()">✕</button>
+    <div class="modal-title">Edit Request</div>
+    <div class="modal-sub">Editing <strong id="editReqNo"></strong></div>
+    <input type="hidden" id="editReqId" />
+    <div class="f"><label>Company Name</label><input type="text" id="editCoName" /></div>
+    <div class="f"><label>Purpose of Expense</label><textarea id="editPurpose" style="min-height:70px;width:100%;padding:9px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:13.5px;font-family:'DM Sans',sans-serif;resize:vertical"></textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="f"><label>Date</label><input type="date" id="editReqDate" /></div>
+      <div class="f"><label>Est. Payment Date</label><input type="date" id="editPayDate" /></div>
+    </div>
+    <div class="f"><label>Payment Method</label>
+      <select id="editPayMethod" style="width:100%;padding:9px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:13.5px;font-family:'DM Sans',sans-serif">
+        <option value="cash">Cash</option>
+        <option value="check">Check</option>
+        <option value="transfer">Bank Transfer</option>
+      </select>
+    </div>
+    <div class="f" style="margin-bottom:0"><label>Bank / Account Info</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <input type="text" id="editBank" placeholder="Bank name" style="padding:9px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
+        <input type="text" id="editAcno" placeholder="Account number" style="padding:9px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
+        <input type="text" id="editAcnm" placeholder="Account name" style="padding:9px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
+        <input type="text" id="editTin" placeholder="TIN No." style="padding:9px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
+      </div>
+    </div>
+    <div class="emsg" id="editReqErr"></div>
+    <div id="editReqOk" style="font-size:12px;color:var(--ok);margin-top:8px;display:none;background:var(--ok-bg);padding:8px 10px;border-radius:6px;border:1px solid var(--ok-bd)"></div>
+    <div style="display:flex;gap:8px;margin-top:.75rem">
+      <button class="bghost" onclick="closeEditReq()" style="flex:1">Cancel</button>
+      <button class="bsub" id="editReqBtn" onclick="saveEditRequest()" style="flex:2">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADMIN RESET PASSWORD MODAL -->
 <div class="modal-backdrop" id="resetPwModal" onclick="closeResetPwModalBg(event)">
   <div class="modal">
@@ -835,12 +872,11 @@ function mapRequest(r) {
 ═══════════════════════════════════ */
 async function promptPushPermission() {
   try {
-    if (!window.OneSignal) return;
+    if (!window.OneSignal) { console.warn('OneSignal not loaded'); return; }
     const permission = await OneSignal.Notifications.permissionNative;
-    // Already granted or denied — don't show banner
-    if (permission === 'granted') return;
-    if (permission === 'denied') return;
-    // Show banner for user to tap (iOS requires gesture)
+    console.log('Push permission status:', permission);
+    if (permission === 'granted') { console.log('Already granted'); return; }
+    if (permission === 'denied') { console.log('Already denied — user must enable in settings'); return; }
     const banner = document.getElementById('pushBanner');
     banner.style.display = 'flex';
   } catch(e) { console.warn('Push prompt error:', e); }
@@ -849,8 +885,14 @@ async function promptPushPermission() {
 async function enablePush() {
   document.getElementById('pushBanner').style.display = 'none';
   try {
-    await OneSignal.Notifications.requestPermission();
-  } catch(e) { console.warn('Push permission error:', e); }
+    console.log('Requesting push permission...');
+    const result = await OneSignal.Notifications.requestPermission();
+    console.log('Permission result:', result);
+    const isPushEnabled = await OneSignal.User.PushSubscription.optedIn;
+    console.log('Opted in:', isPushEnabled);
+    const subId = await OneSignal.User.PushSubscription.id;
+    console.log('Subscription ID:', subId);
+  } catch(e) { console.warn('Push permission error:', e.message || e); }
 }
 function goAuth(id) {
   ['scrLogin','scrSignup','scrPending'].forEach(s => {
@@ -1277,23 +1319,34 @@ async function renderHist() {
         <td class="r">${it.vat?'₱ '+parseFloat(it.vat).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}):''}</td>
         <td class="r">${it.tot?'₱ '+parseFloat(it.tot).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}):''}</td>
       </tr>`).join('');
+      // Build action bar
+      let approveBtn='', denyBtn='', statusLine='';
+      if(CU.isAdmin){
+        if(st!=='done' && st!=='denied'){
+          const isMj=CU.akey==='manjoon', isSy=CU.akey==='sunyong';
+          if(sy && !r.checkedDone && isMj)
+            approveBtn+=`<button class="happ-btn happ-ok" onclick="histCkApprove('${r.id}')">✓ Approve (Check)</button>`;
+          if((!sy&&!r.approvedDone&&isMj)||(sy&&r.checkedDone&&!r.approvedDone&&isSy))
+            approveBtn+=`<button class="happ-btn happ-pu" onclick="histApApprove('${r.id}')">✓ Approve</button>`;
+          denyBtn=`<button class="happ-btn happ-deny" onclick="histDeny('${r.id}')">✕ Deny</button>`;
+        } else if(st==='denied'){
+          statusLine=`<span style="color:var(--err);font-weight:600;font-size:12px">✕ Denied</span>`;
+        } else {
+          statusLine=`<span style="color:var(--ok);font-weight:600;font-size:12px">✓ Approved</span>`;
+        }
+      }
       let appBar='';
-      if(CU.isAdmin && st!=='done' && st!=='denied'){
-        const isMj=CU.akey==='manjoon', isSy=CU.akey==='sunyong';
-        let approveBtn='', denyBtn='';
-        if(sy && !r.checkedDone && isMj){
-          approveBtn+=`<button class="happ-btn happ-ok" onclick="histCkApprove('${r.id}')">✓ Approve (Check)</button>`;
-        }
-        if((!sy&&!r.approvedDone&&isMj)||(sy&&r.checkedDone&&!r.approvedDone&&isSy)){
-          approveBtn+=`<button class="happ-btn happ-pu" onclick="histApApprove('${r.id}')">✓ Approve</button>`;
-        }
-        denyBtn=`<button class="happ-btn happ-deny" onclick="histDeny('${r.id}')">✕ Deny</button>`;
-        if(approveBtn||denyBtn){
-          appBar=`<div class="hist-approve-bar">
-            <span>Actions:</span>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">${approveBtn}${denyBtn}</div>
-          </div>`;
-        }
+      if(CU.isAdmin){
+        const leftBtns = approveBtn||denyBtn||statusLine
+          ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:12px;color:var(--ts)">Actions:</span>${approveBtn}${denyBtn}${statusLine}</div>`
+          : '<div></div>';
+        appBar=`<div class="hist-approve-bar" style="justify-content:space-between">
+          ${leftBtns}
+          <div style="display:flex;gap:6px">
+            <button class="happ-btn" style="background:var(--stripe);color:var(--ts);border:1.5px solid var(--bd)" onclick="openEditRequest('${r.id}')">✎ Edit</button>
+            <button class="happ-btn happ-deny" onclick="deleteRequest('${r.id}')">🗑 Delete</button>
+          </div>
+        </div>`;
       } else if(st==='denied'){
         appBar=`<div class="hist-approve-bar"><span style="color:var(--err);font-weight:600">This request has been denied.</span></div>`;
       }
@@ -1396,6 +1449,68 @@ async function histDeny(id){
   if(!confirm('Are you sure you want to deny this request?')) return;
   await sbPatch('requests',{id},{denied:true}); renderHist();
 }
+
+async function deleteRequest(id) {
+  if (!confirm('Delete this request? This cannot be undone.')) return;
+  await sbDelete('requests', {id});
+  renderHist();
+}
+
+async function openEditRequest(id) {
+  const rows = await sbGet('requests', `id=eq.${id}`);
+  if (!rows.length) return;
+  const r = mapRequest(rows[0]);
+  document.getElementById('editReqId').value = r.id;
+  document.getElementById('editReqNo').textContent = r.reqNo;
+  document.getElementById('editCoName').value = r.company || '';
+  document.getElementById('editPurpose').value = r.purpose || '';
+  document.getElementById('editReqDate').value = r.reqDate || '';
+  document.getElementById('editPayDate').value = r.payDate || '';
+  document.getElementById('editPayMethod').value = r.paymentMethod || 'cash';
+  document.getElementById('editBank').value = r.bank || '';
+  document.getElementById('editAcno').value = r.acno || '';
+  document.getElementById('editAcnm').value = r.acnm || '';
+  document.getElementById('editTin').value = r.tin || '';
+  document.getElementById('editReqErr').style.display = 'none';
+  document.getElementById('editReqOk').style.display = 'none';
+  document.getElementById('editReqModal').classList.add('on');
+}
+
+async function saveEditRequest() {
+  const id  = document.getElementById('editReqId').value;
+  const co  = document.getElementById('editCoName').value.trim();
+  const pu  = document.getElementById('editPurpose').value.trim();
+  const rd  = document.getElementById('editReqDate').value;
+  const pd  = document.getElementById('editPayDate').value;
+  const pm  = document.getElementById('editPayMethod').value;
+  const err = document.getElementById('editReqErr');
+  const ok  = document.getElementById('editReqOk');
+  const btn = document.getElementById('editReqBtn');
+  err.style.display = 'none'; ok.style.display = 'none';
+  if (!co || !pu || !rd || !pd) { err.textContent='Company, purpose, and dates are required.'; err.style.display='block'; return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await sbPatch('requests', {id}, {
+      company: co, purpose: pu, req_date: rd, pay_date: pd,
+      payment_method: pm,
+      bank: document.getElementById('editBank').value,
+      acno: document.getElementById('editAcno').value,
+      acnm: document.getElementById('editAcnm').value,
+      tin:  document.getElementById('editTin').value,
+    });
+    ok.textContent = 'Saved successfully.';
+    ok.style.display = 'block';
+    setTimeout(() => { closeEditReq(); renderHist(); }, 1200);
+  } catch(e) {
+    err.textContent = 'Failed to save. Please try again.';
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Changes';
+  }
+}
+
+function closeEditReq() { document.getElementById('editReqModal').classList.remove('on'); }
+function closeEditReqBg(e) { if(e.target===document.getElementById('editReqModal')) closeEditReq(); }
 
 /* ═══════════════════════════════════
    ADMIN TABLE
