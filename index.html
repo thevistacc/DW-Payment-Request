@@ -445,8 +445,9 @@ table.adt tbody tr:hover{background:var(--stripe)}
       <div class="tabs">
         <button class="tb on" id="tbForm"  onclick="goTab('form')">New Request</button>
         <button class="tb"    id="tbHist"  onclick="goTab('hist')">My Requests</button>
-        <button class="tb"    id="tbCash"  onclick="goTab('cash')"  style="display:none">Cash Payment</button>
-        <button class="tb"    id="tbAdmin" onclick="goTab('admin')" style="display:none">User Management</button>
+        <button class="tb"    id="tbCash"  onclick="goTab('cash')"    style="display:none">Cash Payment</button>
+        <button class="tb"    id="tbBal"   onclick="goTab('bal')"     style="display:none">Balance</button>
+        <button class="tb"    id="tbAdmin" onclick="goTab('admin')"   style="display:none">User Management</button>
       </div>
     </div>
     <div class="tr">
@@ -675,6 +676,16 @@ table.adt tbody tr:hover{background:var(--stripe)}
       <div id="cashList"></div>
     </div>
 
+    <!-- BALANCE TAB -->
+    <div id="tabBal" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.25rem;flex-wrap:wrap;gap:8px">
+        <div class="ph" style="margin:0">Balance</div>
+        <button onclick="openEditBal()" style="display:flex;align-items:center;gap:6px;padding:7px 16px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">✎ Edit</button>
+      </div>
+      <div class="ps">Account balances and financial summary</div>
+      <div id="balContent"></div>
+    </div>
+
     <!-- ADMIN TAB -->
     <div id="tabAdmin" style="display:none">
       <div class="ph">User Management</div>
@@ -724,6 +735,62 @@ table.adt tbody tr:hover{background:var(--stripe)}
     <div class="emsg" id="pwErr"></div>
     <div id="pwOk" style="font-size:12px;color:var(--ok);margin-top:8px;display:none;background:var(--ok-bg);padding:8px 10px;border-radius:6px;border:1px solid var(--ok-bd)"></div>
     <button class="bp" id="pwBtn" onclick="doChangePw()" style="margin-top:.75rem">Save New Password</button>
+  </div>
+</div>
+
+<!-- EDIT BALANCE MODAL -->
+<div class="modal-backdrop" id="editBalModal" onclick="closeEditBalBg(event)">
+  <div class="modal" style="max-width:560px;max-height:92vh;overflow-y:auto">
+    <button class="modal-close" onclick="closeEditBal()">✕</button>
+    <div class="modal-title">Edit Balance</div>
+    <div class="modal-sub">Update account balances and financial data</div>
+
+    <!-- Bank PH -->
+    <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px">Bank Accounts (PHP)</div>
+    <div id="ebBankPH" style="margin-bottom:1rem"></div>
+    <button onclick="addBalRow('ebBankPH','bankph')" class="addbtn" style="margin-bottom:1.25rem">＋ Add Bank (PHP)</button>
+
+    <!-- Bank USD -->
+    <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px">Bank Accounts (USD)</div>
+    <div id="ebBankUSD" style="margin-bottom:1rem"></div>
+    <button onclick="addBalRow('ebBankUSD','bankusd')" class="addbtn" style="margin-bottom:1.25rem">＋ Add Bank (USD)</button>
+
+    <!-- Cash -->
+    <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px">Cash Holdings</div>
+    <div id="ebCash" style="margin-bottom:1rem"></div>
+    <button onclick="addBalRow('ebCash','cash')" class="addbtn" style="margin-bottom:1.25rem">＋ Add Cash Item</button>
+
+    <!-- Collection -->
+    <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px">Collection Status</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.25rem">
+      <div class="f" style="margin:0"><label>Previous Month</label><input type="number" id="ebColPrev" placeholder="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>Current Month</label><input type="number" id="ebColCurr" placeholder="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>Cumulative Total</label><input type="number" id="ebColCum" placeholder="0" step="any" /></div>
+    </div>
+
+    <!-- Expense -->
+    <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px">Expense Category</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.25rem">
+      <div class="f" style="margin:0"><label>Material</label><input type="number" id="ebExpMat" placeholder="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>Labor</label><input type="number" id="ebExpLab" placeholder="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>Expenses</label><input type="number" id="ebExpExp" placeholder="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>Equipment</label><input type="number" id="ebExpEqu" placeholder="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>Office (PCF)</label><input type="number" id="ebExpOff" placeholder="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>Site (PCF)</label><input type="number" id="ebExpSite" placeholder="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>Logistics</label><input type="number" id="ebExpLog" placeholder="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>ETC</label><input type="number" id="ebExpEtc" placeholder="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>Tax</label><input type="number" id="ebExpTax" placeholder="0" step="any" /></div>
+    </div>
+
+    <!-- Construction -->
+    <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px">Construction Usage Amount</div>
+    <div class="f" style="margin-bottom:1.25rem"><input type="number" id="ebConstruction" placeholder="0" step="any" /></div>
+
+    <div class="emsg" id="ebErr"></div>
+    <div style="display:flex;gap:8px;margin-top:.5rem">
+      <button class="bghost" onclick="closeEditBal()" style="flex:1">Cancel</button>
+      <button class="bsub" id="ebBtn" onclick="saveBalance()" style="flex:2">Save Balance</button>
+    </div>
   </div>
 </div>
 
@@ -1115,6 +1182,7 @@ async function launchApp() {
   document.getElementById('aBadge').style.display = CU.isAdmin ? '' : 'none';
   document.getElementById('tbAdmin').style.display = CU.isAdmin ? '' : 'none';
   document.getElementById('tbCash').style.display  = CU.isAdmin ? '' : 'none';
+  document.getElementById('tbBal').style.display   = CU.isAdmin ? '' : 'none';
   document.getElementById('tbHist').textContent = CU.isAdmin ? 'All Requests' : 'My Requests';
   // Request push notification permission after login
   setTimeout(() => {
@@ -1132,11 +1200,11 @@ async function launchApp() {
    TABS
 ═══════════════════════════════════ */
 async function goTab(t) {
-  ['Form','Hist','Admin','Cash'].forEach(n => {
+  ['Form','Hist','Admin','Cash','Bal'].forEach(n => {
     document.getElementById('tb'+n)?.classList.remove('on');
     const el = document.getElementById('tab'+n); if(el) el.style.display='none';
   });
-  const map = {form:'Form',hist:'Hist',admin:'Admin',cash:'Cash'};
+  const map = {form:'Form',hist:'Hist',admin:'Admin',cash:'Cash',bal:'Bal'};
   document.getElementById('tb'+map[t])?.classList.add('on');
   document.getElementById('tab'+map[t]).style.display = '';
   if (t==='form') {
@@ -1147,6 +1215,7 @@ async function goTab(t) {
   if (t==='hist') { selectedMonth=''; document.getElementById('ymYear').value=''; document.getElementById('ymMonth').value=''; renderHist(); }
   if (t==='admin') renderAdm();
   if (t==='cash') renderCash();
+  if (t==='bal') renderBal();
 }
 
 /* ═══════════════════════════════════
@@ -1720,8 +1789,276 @@ function closeResetPwModal() { document.getElementById('resetPwModal').classList
 function closeResetPwModalBg(e) { if(e.target===document.getElementById('resetPwModal')) closeResetPwModal(); }
 
 /* ═══════════════════════════════════
-   CASH PAYMENT
+   BALANCE PAGE
 ═══════════════════════════════════ */
+let balData = null;
+
+async function renderBal() {
+  const el = document.getElementById('balContent');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const rows = await sbGet('balance_data', 'order=updated_at.desc&limit=1');
+    balData = rows.length ? JSON.parse(rows[0].data) : getDefaultBal();
+    balData._id = rows.length ? rows[0].id : null;
+    el.innerHTML = buildBalHTML(balData);
+  } catch(e) {
+    // Table may not exist yet — show empty state with edit prompt
+    balData = getDefaultBal();
+    el.innerHTML = buildBalHTML(balData);
+  }
+}
+
+function getDefaultBal() {
+  return {
+    bankPH: [{name:'BDO',balance:8399221.49},{name:'BPI',balance:233209.80},{name:'CHINA BANK(DAU)',balance:589177.15},{name:'RCBC',balance:657342.96}],
+    bankUSD: [{name:'BDO',balance:53979.08}],
+    cash: [{name:'Safe box',balanceBF:200000,disbursed:0},{name:'Jins',balanceBF:180000,disbursed:0},{name:'Rizel',balanceBF:29862.88,disbursed:0},{name:'Allan',balanceBF:0,disbursed:0}],
+    collection: {prev:0,curr:0,cum:0},
+    expense: {mat:1088192.82,lab:1762308.37,exp:321504.13,equ:420597.20,off:67107.37,site:0,log:20350.00,etc:2895701.59,tax:185558.57},
+    construction: 3798511
+  };
+}
+
+function fmtB(v) {
+  if (!v && v!==0) return '—';
+  return Number(v).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function buildBalHTML(d) {
+  const totalPH  = (d.bankPH||[]).reduce((s,r)=>s+(r.balance||0),0);
+  const totalUSD = (d.bankUSD||[]).reduce((s,r)=>s+(r.balance||0),0);
+  const totalCash= (d.cash||[]).reduce((s,r)=>s+(r.balanceBF||0)-(r.disbursed||0),0);
+  const totalExp = Object.values(d.expense||{}).reduce((s,v)=>s+(parseFloat(v)||0),0);
+
+  const bankPHRows = (d.bankPH||[]).map(r=>`
+    <tr><td style="padding:8px 14px">${r.name}</td>
+    <td style="padding:8px 14px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-weight:500">${fmtB(r.balance)}</td></tr>`).join('');
+
+  const bankUSDRows = (d.bankUSD||[]).map(r=>`
+    <tr><td style="padding:8px 14px">${r.name}</td>
+    <td style="padding:8px 14px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-weight:500">${fmtB(r.balance)}</td></tr>`).join('');
+
+  const cashRows = (d.cash||[]).map(r=>`
+    <tr><td style="padding:8px 14px">${r.name}</td>
+    <td style="padding:8px 14px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-weight:500">${fmtB(r.balanceBF)}</td>
+    <td style="padding:8px 14px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;color:var(--err)">${r.disbursed?fmtB(r.disbursed):'—'}</td>
+    <td style="padding:8px 14px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-weight:600">${fmtB((r.balanceBF||0)-(r.disbursed||0))}</td></tr>`).join('');
+
+  const exp = d.expense||{};
+  const expRows = [
+    ['Material',exp.mat],['Labor',exp.lab],['Expenses',exp.exp],
+    ['Equipment',exp.equ],['Office (PCF)',exp.off],['Site (PCF)',exp.site],
+    ['Logistics',exp.log],['ETC',exp.etc],['Tax',exp.tax]
+  ].map(([label,val])=>`
+    <tr><td style="padding:7px 14px;font-size:13px">${label}</td>
+    <td style="padding:7px 14px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:13px">${fmtB(val)}</td></tr>`).join('');
+
+  const col = d.collection||{};
+
+  const thStyle = `style="padding:9px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;border-bottom:1.5px solid var(--bd);background:var(--stripe)"`;
+  const thR = `style="padding:9px 14px;text-align:right;font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;border-bottom:1.5px solid var(--bd);background:var(--stripe)"`;
+  const tfStyle = `style="padding:9px 14px;font-size:13px;font-weight:700;color:var(--blue);background:var(--stripe);border-top:1.5px solid var(--bd)"`;
+  const tfR = `style="padding:9px 14px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--blue);background:var(--stripe);border-top:1.5px solid var(--bd)"`;
+
+  return `
+  <!-- Section 1: Account Status -->
+  <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">1. Account Status</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:1.5rem">
+    <!-- Bank PH -->
+    <div class="card">
+      <div class="ch"><div class="ci">🏦</div><div class="ct">Bank (PHP)</div></div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr><th ${thStyle}>Bank</th><th ${thR}>Balance</th></tr></thead>
+          <tbody>${bankPHRows}</tbody>
+          <tfoot><tr><td ${tfStyle}>Total</td><td ${tfR}>₱ ${fmtB(totalPH)}</td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+    <!-- Bank USD -->
+    <div class="card">
+      <div class="ch"><div class="ci">💵</div><div class="ct">Bank (USD)</div></div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr><th ${thStyle}>Bank</th><th ${thR}>Balance</th></tr></thead>
+          <tbody>${bankUSDRows}</tbody>
+          <tfoot><tr><td ${tfStyle}>Total</td><td ${tfR}>$ ${fmtB(totalUSD)}</td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+    <!-- Cash -->
+    <div class="card">
+      <div class="ch"><div class="ci">💰</div><div class="ct">Cash</div></div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr><th ${thStyle}>Name</th><th ${thR}>Balance B/F</th><th ${thR}>Disbursed</th><th ${thR}>Balance</th></tr></thead>
+          <tbody>${cashRows}</tbody>
+          <tfoot><tr><td ${tfStyle}>Total</td><td colspan="2"></td><td ${tfR}>₱ ${fmtB(totalCash)}</td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Collection -->
+  <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">2. Collection Status</div>
+  <div class="card" style="margin-bottom:1.5rem">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);text-align:center">
+      ${[['Previous Month',col.prev],['Current Month',col.curr],['Cumulative Total',col.cum]].map(([label,val],i)=>`
+      <div style="padding:18px 16px;${i<2?'border-right:1px solid var(--bd)':''}">
+        <div style="font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px">${label}</div>
+        <div style="font-size:20px;font-weight:700;color:var(--text);font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums">${val?'₱ '+fmtB(val):'—'}</div>
+      </div>`).join('')}
+    </div>
+  </div>
+
+  <!-- Sections 3 & 4 side by side -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:1.5rem">
+    <!-- Section 3: Expense -->
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">3. Expense Category</div>
+      <div class="card">
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr><th ${thStyle}>Category</th><th ${thR}>Amount</th></tr></thead>
+            <tbody>${expRows}</tbody>
+            <tfoot><tr><td ${tfStyle}>Total</td><td ${tfR}>₱ ${fmtB(totalExp)}</td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+    <!-- Section 4: Construction -->
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">4. Construction Usage Amount</div>
+      <div class="card">
+        <div style="padding:32px 24px;text-align:center">
+          <div style="font-size:13px;color:var(--ts);margin-bottom:10px">Total Usage</div>
+          <div style="font-size:32px;font-weight:700;color:var(--blue);font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums">₱ ${fmtB(d.construction)}</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function openEditBal() {
+  const d = balData || getDefaultBal();
+
+  // Bank PH rows
+  const phEl = document.getElementById('ebBankPH');
+  phEl.innerHTML = '';
+  (d.bankPH||[]).forEach(r => addBalRow('ebBankPH','bankph',r.name,r.balance));
+
+  // Bank USD rows
+  const usdEl = document.getElementById('ebBankUSD');
+  usdEl.innerHTML = '';
+  (d.bankUSD||[]).forEach(r => addBalRow('ebBankUSD','bankusd',r.name,r.balance));
+
+  // Cash rows
+  const cashEl = document.getElementById('ebCash');
+  cashEl.innerHTML = '';
+  (d.cash||[]).forEach(r => addBalRow('ebCash','cash',r.name,r.balanceBF,r.disbursed));
+
+  // Collection
+  const col = d.collection||{};
+  document.getElementById('ebColPrev').value = col.prev||'';
+  document.getElementById('ebColCurr').value = col.curr||'';
+  document.getElementById('ebColCum').value  = col.cum||'';
+
+  // Expense
+  const exp = d.expense||{};
+  ['Mat','Lab','Exp','Equ','Off','Site','Log','Etc','Tax'].forEach(k => {
+    const el = document.getElementById('ebExp'+k);
+    if (el) el.value = exp[k.toLowerCase()]||'';
+  });
+
+  // Construction
+  document.getElementById('ebConstruction').value = d.construction||'';
+  document.getElementById('ebErr').style.display = 'none';
+  document.getElementById('editBalModal').classList.add('on');
+}
+
+function addBalRow(containerId, type, name='', val='', disbursed='') {
+  const el = document.getElementById(containerId);
+  const row = document.createElement('div');
+  row.style.cssText = 'display:grid;gap:8px;margin-bottom:8px;align-items:center';
+  if (type === 'cash') {
+    row.style.gridTemplateColumns = '1fr 1fr 1fr auto';
+    row.innerHTML = `
+      <input type="text"   class="bal-name"      value="${name}"      placeholder="Name"       style="padding:8px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
+      <input type="number" class="bal-val"        value="${val}"       placeholder="Balance B/F" style="padding:8px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
+      <input type="number" class="bal-disbursed"  value="${disbursed}" placeholder="Disbursed"  style="padding:8px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
+      <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;color:var(--th);font-size:16px;padding:4px">✕</button>`;
+  } else {
+    row.style.gridTemplateColumns = '1fr 1fr auto';
+    row.innerHTML = `
+      <input type="text"   class="bal-name" value="${name}" placeholder="Bank name" style="padding:8px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
+      <input type="number" class="bal-val"  value="${val}"  placeholder="Balance"   style="padding:8px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif" />
+      <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;color:var(--th);font-size:16px;padding:4px">✕</button>`;
+  }
+  el.appendChild(row);
+}
+
+async function saveBalance() {
+  const btn = document.getElementById('ebBtn');
+  const err = document.getElementById('ebErr');
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const bankPH = Array.from(document.querySelectorAll('#ebBankPH > div')).map(r=>({
+      name: r.querySelector('.bal-name').value.trim(),
+      balance: parseFloat(r.querySelector('.bal-val').value)||0
+    })).filter(r=>r.name);
+
+    const bankUSD = Array.from(document.querySelectorAll('#ebBankUSD > div')).map(r=>({
+      name: r.querySelector('.bal-name').value.trim(),
+      balance: parseFloat(r.querySelector('.bal-val').value)||0
+    })).filter(r=>r.name);
+
+    const cash = Array.from(document.querySelectorAll('#ebCash > div')).map(r=>({
+      name: r.querySelector('.bal-name').value.trim(),
+      balanceBF: parseFloat(r.querySelector('.bal-val').value)||0,
+      disbursed: parseFloat(r.querySelector('.bal-disbursed').value)||0
+    })).filter(r=>r.name);
+
+    const data = JSON.stringify({
+      bankPH, bankUSD, cash,
+      collection: {
+        prev: parseFloat(document.getElementById('ebColPrev').value)||0,
+        curr: parseFloat(document.getElementById('ebColCurr').value)||0,
+        cum:  parseFloat(document.getElementById('ebColCum').value)||0,
+      },
+      expense: {
+        mat:  parseFloat(document.getElementById('ebExpMat').value)||0,
+        lab:  parseFloat(document.getElementById('ebExpLab').value)||0,
+        exp:  parseFloat(document.getElementById('ebExpExp').value)||0,
+        equ:  parseFloat(document.getElementById('ebExpEqu').value)||0,
+        off:  parseFloat(document.getElementById('ebExpOff').value)||0,
+        site: parseFloat(document.getElementById('ebExpSite').value)||0,
+        log:  parseFloat(document.getElementById('ebExpLog').value)||0,
+        etc:  parseFloat(document.getElementById('ebExpEtc').value)||0,
+        tax:  parseFloat(document.getElementById('ebExpTax').value)||0,
+      },
+      construction: parseFloat(document.getElementById('ebConstruction').value)||0
+    });
+
+    if (balData._id) {
+      await sbPatch('balance_data', {id: balData._id}, {data, updated_at: new Date().toISOString()});
+    } else {
+      await sbPost('balance_data', {id:'bal'+Date.now(), data, updated_at: new Date().toISOString()});
+    }
+
+    closeEditBal();
+    renderBal();
+  } catch(e) {
+    err.textContent = 'Failed to save: '+(e.message||e);
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Balance';
+  }
+}
+
+function closeEditBal() { document.getElementById('editBalModal').classList.remove('on'); }
+function closeEditBalBg(e) { if(e.target===document.getElementById('editBalModal')) closeEditBal(); }
 let cashData = []; // all loaded rows
 
 async function renderCash() {
