@@ -738,6 +738,35 @@ table.adt tbody tr:hover{background:var(--stripe)}
   </div>
 </div>
 
+<!-- APPROVE WITH BANK SELECT MODAL -->
+<div class="modal-backdrop" id="approveModal" onclick="closeApproveModalBg(event)">
+  <div class="modal" style="max-width:420px">
+    <button class="modal-close" onclick="closeApproveModal()">✕</button>
+    <div class="modal-title">Approve Request</div>
+    <div class="modal-sub" id="approveModalSub">Select payment source</div>
+    <input type="hidden" id="approveReqId" />
+    <input type="hidden" id="approveType" /><!-- 'check' or 'final' -->
+
+    <div style="background:var(--stripe);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:1rem">
+      <div style="font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px">Payment Amount</div>
+      <div style="font-size:22px;font-weight:700;color:var(--blue);font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums" id="approveAmount">₱ 0.00</div>
+    </div>
+
+    <div class="f"><label>Deduct from</label>
+      <select id="approveBankSel" style="width:100%;padding:9px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:13.5px;font-family:'DM Sans',sans-serif">
+        <option value="">— Select account —</option>
+      </select>
+    </div>
+    <div id="approveBalPreview" style="font-size:12px;color:var(--ts);margin-top:-6px;margin-bottom:1rem;padding:8px 10px;background:var(--stripe);border-radius:6px;display:none"></div>
+
+    <div class="emsg" id="approveErr"></div>
+    <div style="display:flex;gap:8px;margin-top:.75rem">
+      <button class="bghost" onclick="closeApproveModal()" style="flex:1">Cancel</button>
+      <button class="bsub" id="approveBtn" onclick="submitApprove()" style="flex:2">✓ Approve</button>
+    </div>
+  </div>
+</div>
+
 <!-- EDIT BALANCE MODAL -->
 <div class="modal-backdrop" id="editBalModal" onclick="closeEditBalBg(event)">
   <div class="modal" style="max-width:560px;max-height:92vh;overflow-y:auto">
@@ -1495,9 +1524,9 @@ async function renderHist() {
         if(st!=='done' && st!=='denied'){
           const isMj=CU.akey==='manjoon', isSy=CU.akey==='sunyong';
           if(sy && !r.checkedDone && isMj)
-            approveBtn+=`<button class="happ-btn happ-ok" onclick="histCkApprove('${r.id}')">✓ Approve (Check)</button>`;
+            approveBtn+=`<button class="happ-btn happ-ok" onclick="openApproveModal('${r.id}','check',${r.subtotal})">✓ Approve (Check)</button>`;
           if((!sy&&!r.approvedDone&&isMj)||(sy&&r.checkedDone&&!r.approvedDone&&isSy))
-            approveBtn+=`<button class="happ-btn happ-pu" onclick="histApApprove('${r.id}')">✓ Approve</button>`;
+            approveBtn+=`<button class="happ-btn happ-pu" onclick="openApproveModal('${r.id}','final',${r.subtotal})">✓ Approve</button>`;
           denyBtn=`<button class="happ-btn happ-deny" onclick="histDeny('${r.id}')">✕ Deny</button>`;
         } else if(st==='denied'){
           statusLine=`<span style="color:var(--err);font-weight:600;font-size:12px">✕ Denied</span>`;
@@ -1615,6 +1644,128 @@ async function histCkApprove(id){
 async function histApApprove(id){
   await sbPatch('requests',{id},{approved_done:true}); renderHist();
 }
+
+/* ── Approve with Bank Select ── */
+async function openApproveModal(reqId, type, amount) {
+  document.getElementById('approveReqId').value = reqId;
+  document.getElementById('approveType').value  = type;
+  document.getElementById('approveErr').style.display = 'none';
+  document.getElementById('approveBalPreview').style.display = 'none';
+  document.getElementById('approveModalSub').textContent =
+    type === 'check' ? 'Approve (Check Review) — select payment source' : 'Final Approval — select payment source';
+  document.getElementById('approveAmount').textContent =
+    '₱ ' + Number(amount).toLocaleString('en-PH',{minimumFractionDigits:2});
+
+  // Build bank dropdown from balance_data
+  const sel = document.getElementById('approveBankSel');
+  sel.innerHTML = '<option value="">— Select account —</option>';
+  try {
+    const rows = await sbGet('balance_data','order=updated_at.desc&limit=1');
+    const bd = rows.length ? JSON.parse(rows[0].data) : null;
+    if (bd) {
+      const grp1 = document.createElement('optgroup'); grp1.label = 'Bank (PHP)';
+      (bd.bankPH||[]).forEach((b,i) => {
+        const o = document.createElement('option');
+        o.value = `bankph_${i}`;
+        o.textContent = `${b.name}  —  ₱ ${Number(b.balance).toLocaleString('en-PH',{minimumFractionDigits:2})}`;
+        grp1.appendChild(o);
+      });
+      sel.appendChild(grp1);
+
+      const grp2 = document.createElement('optgroup'); grp2.label = 'Bank (USD)';
+      (bd.bankUSD||[]).forEach((b,i) => {
+        const o = document.createElement('option');
+        o.value = `bankusd_${i}`;
+        o.textContent = `${b.name}  —  $ ${Number(b.balance).toLocaleString('en-PH',{minimumFractionDigits:2})}`;
+        grp2.appendChild(o);
+      });
+      sel.appendChild(grp2);
+
+      const grp3 = document.createElement('optgroup'); grp3.label = 'Cash';
+      (bd.cash||[]).forEach((b,i) => {
+        const bal = (b.balanceBF||0)-(b.disbursed||0);
+        const o = document.createElement('option');
+        o.value = `cash_${i}`;
+        o.textContent = `${b.name}  —  ₱ ${Number(bal).toLocaleString('en-PH',{minimumFractionDigits:2})}`;
+        grp3.appendChild(o);
+      });
+      sel.appendChild(grp3);
+    }
+  } catch(e) { /* balance table may not exist */ }
+
+  sel.onchange = () => updateApprovePreview(amount);
+  document.getElementById('approveModal').classList.add('on');
+}
+
+function updateApprovePreview(amount) {
+  const sel = document.getElementById('approveBankSel');
+  const preview = document.getElementById('approveBalPreview');
+  if (!sel.value) { preview.style.display='none'; return; }
+
+  const text = sel.options[sel.selectedIndex].textContent;
+  const match = text.match(/[₱$]\s*([\d,]+\.?\d*)/);
+  if (match) {
+    const current = parseFloat(match[1].replace(/,/g,''));
+    const after = current - Number(amount);
+    const color = after < 0 ? 'var(--err)' : 'var(--ok)';
+    preview.style.display = 'block';
+    preview.innerHTML = `After approval: <strong style="color:${color};font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums">
+      ${after < 0 ? '⚠ ' : ''}${text.includes('$')?'$':'₱'} ${Math.abs(after).toLocaleString('en-PH',{minimumFractionDigits:2})}
+      ${after < 0 ? ' (insufficient balance)' : ''}</strong>`;
+  }
+}
+
+async function submitApprove() {
+  const reqId  = document.getElementById('approveReqId').value;
+  const type   = document.getElementById('approveType').value;
+  const bankVal= document.getElementById('approveBankSel').value;
+  const err    = document.getElementById('approveErr');
+  const btn    = document.getElementById('approveBtn');
+  err.style.display = 'none';
+
+  if (!bankVal) { err.textContent='Please select a payment account.'; err.style.display='block'; return; }
+
+  btn.disabled = true; btn.textContent = 'Approving…';
+  try {
+    // 1. Update request status
+    if (type === 'check') {
+      await sbPatch('requests',{id:reqId},{checked_done:true});
+    } else {
+      await sbPatch('requests',{id:reqId},{approved_done:true, payment_account: bankVal});
+    }
+
+    // 2. Deduct from balance
+    const rows = await sbGet('balance_data','order=updated_at.desc&limit=1');
+    if (rows.length) {
+      const bd = JSON.parse(rows[0].data);
+      const reqRows = await sbGet('requests',`id=eq.${reqId}`);
+      const amount = reqRows.length ? (reqRows[0].subtotal||0) : 0;
+
+      const [cat, idx] = bankVal.split('_');
+      const i = parseInt(idx);
+      if (cat==='bankph' && bd.bankPH[i]) {
+        bd.bankPH[i].balance = (bd.bankPH[i].balance||0) - amount;
+      } else if (cat==='bankusd' && bd.bankUSD[i]) {
+        bd.bankUSD[i].balance = (bd.bankUSD[i].balance||0) - amount;
+      } else if (cat==='cash' && bd.cash[i]) {
+        bd.cash[i].disbursed = (bd.cash[i].disbursed||0) + amount;
+      }
+
+      await sbPatch('balance_data',{id:rows[0].id},{data:JSON.stringify(bd), updated_at:new Date().toISOString()});
+    }
+
+    closeApproveModal();
+    renderHist();
+  } catch(e) {
+    err.textContent = 'Failed: '+(e.message||e);
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = '✓ Approve';
+  }
+}
+
+function closeApproveModal() { document.getElementById('approveModal').classList.remove('on'); }
+function closeApproveModalBg(e) { if(e.target===document.getElementById('approveModal')) closeApproveModal(); }
 async function histDeny(id){
   if(!confirm('Are you sure you want to deny this request?')) return;
   await sbPatch('requests',{id},{denied:true}); renderHist();
@@ -2329,17 +2480,53 @@ async function handleCashFile(event) {
 
     if (!toInsert.length) { msg.style.color='var(--warn)'; msg.textContent='No valid expense rows found in this file.'; return; }
 
-    msg.textContent = `Uploading ${toInsert.length} rows…`;
+    // Deduplicate: only insert rows not already in DB for this file
+    const existing = await sbGet('cash_expenses', `source_file=eq.${encodeURIComponent(file.name)}`);
+    const existingKeys = new Set(existing.map(r=>`${r.expense_date}_${(r.detail||'').trim()}_${r.jins||0}_${r.allan||0}_${r.rhizel||0}`));
+    const newRows = toInsert.filter(r=>!existingKeys.has(`${r.expense_date}_${r.detail}_${r.jins||0}_${r.allan||0}_${r.rhizel||0}`));
+
+    if (!newRows.length) {
+      msg.style.color='var(--warn)';
+      msg.textContent=`All ${toInsert.length} rows already uploaded. No new entries added.`;
+      return;
+    }
+
+    msg.textContent = `Uploading ${newRows.length} new rows…`;
 
     // Insert in batches of 50
     let inserted = 0;
-    for (let i=0; i<toInsert.length; i+=50) {
-      await sbPost('cash_expenses', toInsert.slice(i,i+50));
-      inserted += Math.min(50, toInsert.length-i);
+    for (let i=0; i<newRows.length; i+=50) {
+      await sbPost('cash_expenses', newRows.slice(i,i+50));
+      inserted += Math.min(50, newRows.length-i);
     }
 
-    msg.style.color = 'var(--ok)';
-    msg.textContent = `✓ ${inserted} rows uploaded successfully from ${file.name}`;
+    // Update balance — deduct new cash totals per person
+    try {
+      const balRows = await sbGet('balance_data','order=updated_at.desc&limit=1');
+      if (balRows.length) {
+        const bd = JSON.parse(balRows[0].data);
+        const totalJins   = newRows.reduce((s,r)=>s+(r.jins||0),0);
+        const totalAllan  = newRows.reduce((s,r)=>s+(r.allan||0),0);
+        const totalRhizel = newRows.reduce((s,r)=>s+(r.rhizel||0),0);
+        (bd.cash||[]).forEach(c => {
+          const n = (c.name||'').toLowerCase();
+          if (n.includes('jins'))                          c.disbursed = (c.disbursed||0) + totalJins;
+          if (n.includes('allan'))                         c.disbursed = (c.disbursed||0) + totalAllan;
+          if (n.includes('rizel')||n.includes('rhizel'))   c.disbursed = (c.disbursed||0) + totalRhizel;
+        });
+        await sbPatch('balance_data',{id:balRows[0].id},{data:JSON.stringify(bd),updated_at:new Date().toISOString()});
+        const parts = [totalJins&&`Jins ₱${totalJins.toLocaleString()}`,totalAllan&&`Allan ₱${totalAllan.toLocaleString()}`,totalRhizel&&`Rhizel ₱${totalRhizel.toLocaleString()}`].filter(Boolean).join(', ');
+        msg.style.color='var(--ok)';
+        msg.textContent=`✓ ${inserted} new rows uploaded. Balance updated — ${parts} deducted from cash.`;
+      } else {
+        msg.style.color='var(--ok)';
+        msg.textContent=`✓ ${inserted} new rows uploaded. (No balance data found to update)`;
+      }
+    } catch(be) {
+      msg.style.color='var(--ok)';
+      msg.textContent=`✓ ${inserted} rows uploaded. Balance update skipped: ${be.message}`;
+    }
+
     event.target.value = '';
     renderCash();
   } catch(e) {
