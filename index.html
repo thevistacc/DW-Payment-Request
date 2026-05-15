@@ -694,6 +694,8 @@ table.adt tbody tr:hover{background:var(--stripe)}
         <select class="hf-select" id="admFRole" onchange="renderAdm()">
           <option value="">All Roles</option>
           <option value="admin">Admin</option>
+          <option value="director">Director</option>
+          <option value="manager">Manager</option>
           <option value="user">User</option>
         </select>
         <select class="hf-select" id="admFStatus" onchange="renderAdm()">
@@ -1068,8 +1070,16 @@ function getStrengthLabel(pw) {
 // Map DB row (snake_case) → app object (camelCase)
 function mapUser(u) {
   return { id:u.id, name:u.name, role:u.role, email:u.email, pw:u.pw,
-           status:u.status, isAdmin:u.is_admin, akey:u.akey, joinedAt:u.joined_at };
+           status:u.status, isAdmin:u.is_admin, akey:u.akey, joinedAt:u.joined_at,
+           userLevel: u.user_level || (u.is_admin ? 'admin' : 'user') };
 }
+// Permission helpers
+function canSeeAllRequests(u) { return ['admin','director'].includes(u.userLevel); }
+function canApprove(u)        { return ['admin','director'].includes(u.userLevel); }
+function canPreApprove(u)     { return u.userLevel === 'admin'; }
+function canSeeCash(u)        { return ['admin','director','manager'].includes(u.userLevel); }
+function canSeeBalance(u)     { return ['admin','director'].includes(u.userLevel); }
+function canSeeUserMgmt(u)    { return ['admin','director'].includes(u.userLevel); }
 function mapRequest(r) {
   return { id:r.id, reqNo:r.req_no, submittedBy:r.submitted_by, submittedByName:r.submitted_by_name,
            reqDate:r.req_date, payDate:r.pay_date, projName:r.proj_name,
@@ -1077,7 +1087,7 @@ function mapRequest(r) {
            paymentMethod:r.payment_method, items:r.items||[],
            tin:r.tin, bank:r.bank, acno:r.acno, acnm:r.acnm, addr:r.addr,
            approver:r.approver, checkedDone:r.checked_done, approvedDone:r.approved_done,
-           denied:r.denied||false,
+           denied:r.denied||false, preApproved:r.pre_approved||false,
            submittedAt:r.submitted_at };
 }
 
@@ -1208,11 +1218,13 @@ async function launchApp() {
   const init = CU.name.split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);
   document.getElementById('uAv').textContent = init;
   document.getElementById('uName').textContent = CU.name;
-  document.getElementById('aBadge').style.display = CU.isAdmin ? '' : 'none';
-  document.getElementById('tbAdmin').style.display = CU.isAdmin ? '' : 'none';
-  document.getElementById('tbCash').style.display  = CU.isAdmin ? '' : 'none';
-  document.getElementById('tbBal').style.display   = CU.isAdmin ? '' : 'none';
-  document.getElementById('tbHist').textContent = CU.isAdmin ? 'All Requests' : 'My Requests';
+  const ul = CU.userLevel;
+  document.getElementById('aBadge').style.display = canSeeAllRequests(CU) ? '' : 'none';
+  document.getElementById('aBadge').textContent = ul === 'admin' ? 'ADMIN' : ul === 'director' ? 'DIRECTOR' : ul === 'manager' ? 'MGR' : '';
+  document.getElementById('tbAdmin').style.display = canSeeUserMgmt(CU) ? '' : 'none';
+  document.getElementById('tbCash').style.display  = canSeeCash(CU)     ? '' : 'none';
+  document.getElementById('tbBal').style.display   = canSeeBalance(CU)  ? '' : 'none';
+  document.getElementById('tbHist').textContent    = canSeeAllRequests(CU) ? 'All Requests' : 'My Requests';
   // Request push notification permission after login
   setTimeout(() => {
     try {
@@ -1454,11 +1466,11 @@ async function renderHist() {
   list.innerHTML='<div class="empty">Loading…</div>';
   try {
     let params = 'order=submitted_at.desc';
-    if (!CU.isAdmin) params += `&submitted_by=eq.${CU.id}`;
+    if (!canSeeAllRequests(CU)) params += `&submitted_by=eq.${CU.id}`;
     const rows = await sbGet('requests', params);
     const reqs = rows.map(mapRequest);
 
-    if (CU.isAdmin) {
+    if (canSeeAllRequests(CU)) {
       document.getElementById('histPageTitle').textContent='All Requests';
       document.getElementById('histPageSub').textContent='Showing all submitted payment requests across all users';
     } else {
@@ -1519,8 +1531,8 @@ async function renderHist() {
         <td class="r">${it.vat?'₱ '+parseFloat(it.vat).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}):''}</td>
         <td class="r">${it.tot?'₱ '+parseFloat(it.tot).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2}):''}</td>
       </tr>`).join('');
-      let approveBtn='', denyBtn='', statusLine='';
-      if(CU.isAdmin){
+      let approveBtn='', denyBtn='', statusLine='', preApproveBtn='';
+      if(canApprove(CU)){
         if(st!=='done' && st!=='denied'){
           const isMj=CU.akey==='manjoon', isSy=CU.akey==='sunyong';
           if(sy && !r.checkedDone && isMj)
@@ -1528,6 +1540,9 @@ async function renderHist() {
           if((!sy&&!r.approvedDone&&isMj)||(sy&&r.checkedDone&&!r.approvedDone&&isSy))
             approveBtn+=`<button class="happ-btn happ-pu" onclick="openApproveModal('${r.id}','final',${r.subtotal})">✓ Approve</button>`;
           denyBtn=`<button class="happ-btn happ-deny" onclick="histDeny('${r.id}')">✕ Deny</button>`;
+          // Admin can pre-approve before director
+          if(canPreApprove(CU) && !r.preApproved)
+            preApproveBtn=`<button class="happ-btn" style="background:var(--warn-bg);color:var(--warn);border:1.5px solid var(--warn-bd)" onclick="preApproveRequest('${r.id}')">⚡ Pre-Approve</button>`;
         } else if(st==='denied'){
           statusLine=`<span style="color:var(--err);font-weight:600;font-size:12px">✕ Denied</span>`;
         } else {
@@ -1535,9 +1550,13 @@ async function renderHist() {
         }
       }
       let appBar='';
-      if(CU.isAdmin){
-        const leftSide = (approveBtn||denyBtn||statusLine)
-          ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:12px;color:var(--ts)">Actions:</span>${approveBtn}${denyBtn}${statusLine}</div>`
+      if(canApprove(CU)){
+        const leftSide = (approveBtn||denyBtn||preApproveBtn||statusLine)
+          ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:12px;color:var(--ts)">Actions:</span>
+              ${r.preApproved&&st!=='done'?'<span style="font-size:11px;font-weight:600;color:var(--warn);background:var(--warn-bg);padding:2px 8px;border-radius:6px;border:1px solid var(--warn-bd)">⚡ Pre-Approved</span>':''}
+              ${approveBtn}${denyBtn}${preApproveBtn}${statusLine}
+            </div>`
           : `<div></div>`;
         appBar=`<div class="hist-approve-bar" style="justify-content:space-between">
           ${leftSide}
@@ -1548,8 +1567,10 @@ async function renderHist() {
         </div>`;
       } else if(st==='denied'){
         appBar=`<div class="hist-approve-bar"><span style="color:var(--err);font-weight:600">This request has been denied.</span></div>`;
+      } else if(r.preApproved){
+        appBar=`<div class="hist-approve-bar"><span style="font-size:12px;font-weight:600;color:var(--warn);background:var(--warn-bg);padding:2px 8px;border-radius:6px;border:1px solid var(--warn-bd)">⚡ Pre-Approved by Admin</span></div>`;
       }
-      const byLine=CU.isAdmin?`<span style="font-size:11px;color:var(--th);margin-left:8px">by ${r.submittedByName}</span>`:'';
+      const byLine=canSeeAllRequests(CU)?`<span style="font-size:11px;color:var(--th);margin-left:8px">by ${r.submittedByName}</span>`:'';
       const cardStyle=isCheck?'border-color:#fdba74;':'';
       return `<div class="hist-card" style="${cardStyle}">
         <div class="hist-head" onclick="toggleHist('hb${r.id}','hc${r.id}')">
@@ -1636,6 +1657,13 @@ function updateSummaryBar(filtered) {
 function toggleHist(bodyId,chevId){
   const b=document.getElementById(bodyId),c=document.getElementById(chevId);
   const open=b.classList.toggle('open'); c.classList.toggle('open',open);
+}
+
+async function preApproveRequest(id) {
+  if (!canPreApprove(CU)) return;
+  if (!confirm('Pre-approve this request? Director will still need to give final approval.')) return;
+  await sbPatch('requests',{id},{pre_approved:true, pre_approved_by:CU.id});
+  renderHist();
 }
 
 async function histCkApprove(id){
@@ -1844,8 +1872,7 @@ async function renderAdm() {
     let rows=await sbGet('users','order=joined_at.desc');
     let users=rows.map(mapUser);
     users=users.filter(u=>{
-      if(fRole==='admin'&&!u.isAdmin) return false;
-      if(fRole==='user'&&u.isAdmin) return false;
+      if(fRole && u.userLevel!==fRole) return false;
       if(fStatus&&u.status!==fStatus) return false;
       if(fQ&&!u.name.toLowerCase().includes(fQ)&&!u.email.toLowerCase().includes(fQ)) return false;
       return true;
@@ -1858,8 +1885,10 @@ async function renderAdm() {
       const roleSelect=`<select onchange="admChangeRole('${u.id}',this.value)"
         style="width:100%;padding:5px 7px;font-size:12px;font-family:'DM Sans',sans-serif;border:1.5px solid var(--bd);border-radius:6px;background:#fff;color:var(--text);cursor:${isMe?'default':'pointer'}"
         ${isMe?'disabled':''}>
-        <option value="user" ${!u.isAdmin?'selected':''}>User</option>
-        <option value="admin" ${u.isAdmin?'selected':''}>Admin</option>
+        <option value="user"     ${u.userLevel==='user'    ?'selected':''}>User</option>
+        <option value="manager"  ${u.userLevel==='manager' ?'selected':''}>Manager</option>
+        <option value="director" ${u.userLevel==='director'?'selected':''}>Director</option>
+        <option value="admin"    ${u.userLevel==='admin'   ?'selected':''}>Admin</option>
       </select>`;
       let acts='';
       if(isMe){
@@ -1883,11 +1912,11 @@ async function renderAdm() {
   }
 }
 
-async function admChangeRole(id,newRole){
+async function admChangeRole(id,newLevel){
   if(CU&&id===CU.id) return;
-  const isAdmin=(newRole==='admin');
-  const patch={is_admin:isAdmin};
-  if(isAdmin) patch.status='approved';
+  const isAdmin = ['admin','director'].includes(newLevel);
+  const patch = { is_admin: isAdmin, user_level: newLevel };
+  if(isAdmin) patch.status = 'approved';
   await sbPatch('users',{id},patch); renderAdm();
 }
 async function admOk(id){ await sbPatch('users',{id},{status:'approved'}); renderAdm(); }
@@ -2014,7 +2043,7 @@ function buildBalHTML(d) {
   return `
   <!-- Section 1: Account Status -->
   <div style="font-size:12px;font-weight:700;color:var(--ts);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">1. Account Status</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:1.5rem">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
     <!-- Bank PH -->
     <div class="card">
       <div class="ch"><div class="ci">🏦</div><div class="ct">Bank (PHP)</div></div>
@@ -2037,16 +2066,16 @@ function buildBalHTML(d) {
         </table>
       </div>
     </div>
-    <!-- Cash -->
-    <div class="card">
-      <div class="ch"><div class="ci">💰</div><div class="ct">Cash</div></div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead><tr><th ${thStyle}>Name</th><th ${thR}>Balance B/F</th><th ${thR}>Disbursed</th><th ${thR}>Balance</th></tr></thead>
-          <tbody>${cashRows}</tbody>
-          <tfoot><tr><td ${tfStyle}>Total</td><td colspan="2"></td><td ${tfR}>₱ ${fmtB(totalCash)}</td></tr></tfoot>
-        </table>
-      </div>
+  </div>
+  <!-- Cash — full width -->
+  <div class="card" style="margin-bottom:1.5rem">
+    <div class="ch"><div class="ci">💰</div><div class="ct">Cash</div></div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr><th ${thStyle}>Name</th><th ${thR}>Balance B/F</th><th ${thR}>Disbursed</th><th ${thR}>Balance</th></tr></thead>
+        <tbody>${cashRows}</tbody>
+        <tfoot><tr><td ${tfStyle}>Total</td><td colspan="2"></td><td ${tfR}>₱ ${fmtB(totalCash)}</td></tr></tfoot>
+      </table>
     </div>
   </div>
 
