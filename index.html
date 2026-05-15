@@ -609,14 +609,17 @@ table.adt tbody tr:hover{background:var(--stripe)}
 
       <!-- UPLOAD CARD -->
       <div class="card" style="margin-bottom:1.25rem">
-        <div class="ch"><div class="ci">📤</div><div class="ct">Upload Excel File</div></div>
+        <div class="ch"><div class="ci">📤</div><div class="ct">Add Expense</div></div>
         <div class="cb">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <label for="cashFileInput" style="display:flex;align-items:center;gap:8px;padding:9px 18px;background:var(--blue-l);color:var(--blue);border:1.5px dashed #a8c8f0;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">
-              📂 Choose Excel File
+              📂 Upload Excel
             </label>
             <input type="file" id="cashFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleCashFile(event)" />
-            <span id="cashFileName" style="font-size:12px;color:var(--ts)">No file selected</span>
+            <button onclick="openAddCashRow()" style="display:flex;align-items:center;gap:8px;padding:9px 18px;background:#fff;color:var(--text);border:1.5px solid var(--bd);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif" onmouseover="this.style.background='var(--stripe)'" onmouseout="this.style.background='#fff'">
+              ✏️ Add Entry
+            </button>
+            <span id="cashFileName" style="font-size:12px;color:var(--ts)"></span>
           </div>
           <div id="cashUploadMsg" style="margin-top:10px;font-size:12px;display:none"></div>
         </div>
@@ -721,6 +724,60 @@ table.adt tbody tr:hover{background:var(--stripe)}
     <div class="emsg" id="pwErr"></div>
     <div id="pwOk" style="font-size:12px;color:var(--ok);margin-top:8px;display:none;background:var(--ok-bg);padding:8px 10px;border-radius:6px;border:1px solid var(--ok-bd)"></div>
     <button class="bp" id="pwBtn" onclick="doChangePw()" style="margin-top:.75rem">Save New Password</button>
+  </div>
+</div>
+
+<!-- ADD CASH ENTRY MODAL -->
+<div class="modal-backdrop" id="addCashModal" onclick="closeAddCashBg(event)">
+  <div class="modal" style="max-width:480px">
+    <button class="modal-close" onclick="closeAddCash()">✕</button>
+    <div class="modal-title">Add Cash Expense</div>
+    <div class="modal-sub">Manually enter a daily expense record</div>
+
+    <div class="f"><label>Date <span class="req">*</span></label><input type="date" id="acDate" /></div>
+    <div class="f"><label>Description <span class="req">*</span></label><input type="text" id="acDetail" placeholder="e.g. ice, tire change, OT meal" /></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem">
+      <div class="f" style="margin:0"><label>Unit Price</label><input type="number" id="acUnitPrice" placeholder="0" min="0" step="any" /></div>
+      <div class="f" style="margin:0"><label>Qty</label><input type="number" id="acPcs" placeholder="1" min="0" step="any" /></div>
+    </div>
+
+    <div style="background:var(--stripe);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:1rem">
+      <div style="font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;margin-bottom:10px">Paid by (enter amount per person)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="f" style="margin:0">
+          <label style="color:#1e40af">Jins</label>
+          <input type="number" id="acJins" placeholder="₱ 0" min="0" step="any" style="border-color:#bfdbfe" />
+        </div>
+        <div class="f" style="margin:0">
+          <label style="color:#166534">Allan</label>
+          <input type="number" id="acAllan" placeholder="₱ 0" min="0" step="any" style="border-color:#bbf7d0" />
+        </div>
+        <div class="f" style="margin:0">
+          <label style="color:#7e22ce">Rhizel</label>
+          <input type="number" id="acRhizel" placeholder="₱ 0" min="0" step="any" style="border-color:#e9d5ff" />
+        </div>
+      </div>
+    </div>
+
+    <div class="f" style="margin-bottom:.75rem"><label>Receipt</label>
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:8px;padding:9px 16px;border:1.5px solid var(--bd);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;flex:1;justify-content:center;transition:all .15s" id="rcptYesLabel">
+          <input type="radio" name="acReceipt" value="O" id="acRcptYes" style="display:none" onchange="updateRcptLabel()" />
+          <span style="color:var(--ok)">✓</span> Receipt
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;padding:9px 16px;border:1.5px solid var(--bd);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;flex:1;justify-content:center;transition:all .15s" id="rcptNoLabel">
+          <input type="radio" name="acReceipt" value="X" id="acRcptNo" style="display:none" onchange="updateRcptLabel()" />
+          <span style="color:var(--err)">✕</span> No Receipt
+        </label>
+      </div>
+    </div>
+
+    <div class="emsg" id="acErr"></div>
+    <div style="display:flex;gap:8px;margin-top:.5rem">
+      <button class="bghost" onclick="closeAddCash()" style="flex:1">Cancel</button>
+      <button class="bsub" id="acBtn" onclick="submitAddCash()" style="flex:2">Add Entry</button>
+    </div>
   </div>
 </div>
 
@@ -1717,10 +1774,10 @@ async function renderCash() {
       const dayTotal = items.reduce((s,r) => s+(r.jins||0)+(r.allan||0)+(r.rhizel||0), 0);
       const rows = items.map(r => {
         const rcpt = r.receipt==='O'
-          ? '<span style="color:var(--ok);font-size:11px;font-weight:600">✓</span>'
+          ? '<span style="color:var(--ok);font-size:12px;font-weight:600;white-space:nowrap">✓ Receipt</span>'
           : r.receipt==='X'
-          ? '<span style="color:var(--err);font-size:11px;font-weight:600">✕</span>'
-          : '';
+          ? '<span style="color:var(--err);font-size:12px;font-weight:600;white-space:nowrap">✕ No Receipt</span>'
+          : '<span style="color:var(--th);font-size:12px">—</span>';
         const fmtAmt = v => v ? '₱'+Number(v).toLocaleString('en-PH',{minimumFractionDigits:0}) : '';
         const total = (r.jins||0)+(r.allan||0)+(r.rhizel||0);
         return `<tr style="border-bottom:1px solid var(--bd)">
@@ -1802,6 +1859,77 @@ async function deleteCashRow(id) {
   await sbDelete('cash_expenses', {id});
   renderCash();
 }
+
+function openAddCashRow() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('acDate').value = today;
+  document.getElementById('acDetail').value = '';
+  document.getElementById('acUnitPrice').value = '';
+  document.getElementById('acPcs').value = '';
+  document.getElementById('acJins').value = '';
+  document.getElementById('acAllan').value = '';
+  document.getElementById('acRhizel').value = '';
+  document.getElementById('acRcptYes').checked = false;
+  document.getElementById('acRcptNo').checked = false;
+  document.getElementById('acErr').style.display = 'none';
+  updateRcptLabel();
+  document.getElementById('addCashModal').classList.add('on');
+  setTimeout(() => document.getElementById('acDetail').focus(), 100);
+}
+
+function updateRcptLabel() {
+  const yes = document.getElementById('acRcptYes').checked;
+  const no  = document.getElementById('acRcptNo').checked;
+  const yL  = document.getElementById('rcptYesLabel');
+  const nL  = document.getElementById('rcptNoLabel');
+  yL.style.background  = yes ? 'var(--ok-bg)'  : '#fff';
+  yL.style.borderColor = yes ? 'var(--ok-bd)'  : 'var(--bd)';
+  yL.style.color       = yes ? 'var(--ok)'     : 'var(--text)';
+  nL.style.background  = no  ? 'var(--err-bg)' : '#fff';
+  nL.style.borderColor = no  ? 'var(--err-bd)' : 'var(--bd)';
+  nL.style.color       = no  ? 'var(--err)'    : 'var(--text)';
+}
+
+async function submitAddCash() {
+  const date   = document.getElementById('acDate').value;
+  const detail = document.getElementById('acDetail').value.trim();
+  const jins   = parseFloat(document.getElementById('acJins').value)||0;
+  const allan  = parseFloat(document.getElementById('acAllan').value)||0;
+  const rhizel = parseFloat(document.getElementById('acRhizel').value)||0;
+  const rcpt   = document.querySelector('input[name="acReceipt"]:checked')?.value || null;
+  const err    = document.getElementById('acErr');
+  const btn    = document.getElementById('acBtn');
+  err.style.display = 'none';
+  if (!date)   { err.textContent='Please select a date.'; err.style.display='block'; return; }
+  if (!detail) { err.textContent='Please enter a description.'; err.style.display='block'; return; }
+  if (!jins && !allan && !rhizel) { err.textContent='Enter an amount for at least one person.'; err.style.display='block'; return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await sbPost('cash_expenses', {
+      id: 'ce'+Date.now()+Math.random().toString(36).slice(2,7),
+      expense_date: date,
+      detail,
+      unit_price: parseFloat(document.getElementById('acUnitPrice').value)||null,
+      pcs:        parseFloat(document.getElementById('acPcs').value)||null,
+      jins:  jins||null,
+      allan: allan||null,
+      rhizel:rhizel||null,
+      receipt: rcpt,
+      uploaded_by: CU.id,
+      source_file: 'manual'
+    });
+    closeAddCash();
+    renderCash();
+  } catch(e) {
+    err.textContent = 'Failed to save: '+(e.message||e);
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Add Entry';
+  }
+}
+
+function closeAddCash() { document.getElementById('addCashModal').classList.remove('on'); }
+function closeAddCashBg(e) { if(e.target===document.getElementById('addCashModal')) closeAddCash(); }
 
 async function handleCashFile(event) {
   const file = event.target.files[0];
