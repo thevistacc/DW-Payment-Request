@@ -447,6 +447,7 @@ table.adt tbody tr:hover{background:var(--stripe)}
         <button class="tb"    id="tbHist"  onclick="goTab('hist')">My Requests</button>
         <button class="tb"    id="tbCash"  onclick="goTab('cash')"    style="display:none">Cash Payment</button>
         <button class="tb"    id="tbBal"   onclick="goTab('bal')"     style="display:none">Balance</button>
+        <button class="tb"    id="tbLog"   onclick="goTab('log')"     style="display:none">Activity Log</button>
         <button class="tb"    id="tbAdmin" onclick="goTab('admin')"   style="display:none">User Management</button>
       </div>
     </div>
@@ -674,6 +675,28 @@ table.adt tbody tr:hover{background:var(--stripe)}
       </div>
 
       <div id="cashList"></div>
+    </div>
+
+    <!-- ACTIVITY LOG TAB -->
+    <div id="tabLog" style="display:none">
+      <div class="ph">Activity Log</div>
+      <div class="ps">All changes made across requests, balance, and cash payment</div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
+        <select class="hf-select" id="logFType" onchange="renderLog()">
+          <option value="">All Types</option>
+          <option value="request">Request</option>
+          <option value="balance">Balance</option>
+          <option value="cash">Cash Payment</option>
+          <option value="user">User Management</option>
+        </select>
+        <select class="hf-select" id="logFUser" onchange="renderLog()">
+          <option value="">All Users</option>
+        </select>
+        <input class="hf-search" type="text" id="logFQ" placeholder="Search actions…" oninput="renderLog()" style="flex:1;min-width:160px" />
+      </div>
+
+      <div id="logList"></div>
     </div>
 
     <!-- BALANCE TAB -->
@@ -1080,6 +1103,7 @@ function canPreApprove(u)     { return u.userLevel === 'admin'; }
 function canSeeCash(u)        { return ['admin','director','manager'].includes(u.userLevel); }
 function canSeeBalance(u)     { return ['admin','director'].includes(u.userLevel); }
 function canSeeUserMgmt(u)    { return ['admin','director'].includes(u.userLevel); }
+function canSeeLog(u)         { return u.userLevel === 'admin'; }
 function mapRequest(r) {
   return { id:r.id, reqNo:r.req_no, submittedBy:r.submitted_by, submittedByName:r.submitted_by_name,
            reqDate:r.req_date, payDate:r.pay_date, projName:r.proj_name,
@@ -1224,6 +1248,7 @@ async function launchApp() {
   document.getElementById('tbAdmin').style.display = canSeeUserMgmt(CU) ? '' : 'none';
   document.getElementById('tbCash').style.display  = canSeeCash(CU)     ? '' : 'none';
   document.getElementById('tbBal').style.display   = canSeeBalance(CU)  ? '' : 'none';
+  document.getElementById('tbLog').style.display   = canSeeLog(CU)      ? '' : 'none';
   document.getElementById('tbHist').textContent    = canSeeAllRequests(CU) ? 'All Requests' : 'My Requests';
   // Request push notification permission after login
   setTimeout(() => {
@@ -1241,11 +1266,11 @@ async function launchApp() {
    TABS
 ═══════════════════════════════════ */
 async function goTab(t) {
-  ['Form','Hist','Admin','Cash','Bal'].forEach(n => {
+  ['Form','Hist','Admin','Cash','Bal','Log'].forEach(n => {
     document.getElementById('tb'+n)?.classList.remove('on');
     const el = document.getElementById('tab'+n); if(el) el.style.display='none';
   });
-  const map = {form:'Form',hist:'Hist',admin:'Admin',cash:'Cash',bal:'Bal'};
+  const map = {form:'Form',hist:'Hist',admin:'Admin',cash:'Cash',bal:'Bal',log:'Log'};
   document.getElementById('tb'+map[t])?.classList.add('on');
   document.getElementById('tab'+map[t]).style.display = '';
   if (t==='form') {
@@ -1257,6 +1282,7 @@ async function goTab(t) {
   if (t==='admin') renderAdm();
   if (t==='cash') renderCash();
   if (t==='bal') renderBal();
+  if (t==='log') renderLog();
 }
 
 /* ═══════════════════════════════════
@@ -1809,19 +1835,12 @@ async function submitApprove() {
     if (type === 'check') {
       await sbPatch('requests',{id:reqId},{checked_done:true, payment_account:bankVal});
     } else if (type === 'preapprove') {
-      // Pre-approve: deduct balance now, director still needs to final approve
       await sbPatch('requests',{id:reqId},{pre_approved:true, pre_approved_by:CU.id, payment_account:bankVal});
     } else {
-      // Final approve
-      // If already pre-approved (balance already deducted), skip deduct
       const alreadyDeducted = reqRows.length && reqRows[0].pre_approved && reqRows[0].payment_account;
       await sbPatch('requests',{id:reqId},{approved_done:true, payment_account:bankVal});
-      if (!alreadyDeducted) {
-        await deductBalance(bankVal, amount);
-      }
-      closeApproveModal();
-      renderHist();
-      return;
+      if (!alreadyDeducted) await deductBalance(bankVal, amount);
+      closeApproveModal(); renderHist(); return;
     }
 
     // Deduct for check and preapprove
@@ -1845,6 +1864,7 @@ async function histDeny(id) {
     if (reqRows.length) {
       const r = reqRows[0];
       await sbPatch('requests', {id}, {denied:true});
+      addLog('request','request_deny',`${CU.name} denied request — ${r.req_no||id}`,{reqId:id,reqNo:r.req_no,company:r.company});
       if ((r.pre_approved || r.approved_done) && r.payment_account && r.subtotal) {
         await restoreBalance(r.payment_account, r.subtotal);
       }
@@ -1862,6 +1882,7 @@ async function deleteRequest(id) {
     if (reqRows.length) {
       const r = reqRows[0];
       await sbDelete('requests', {id});
+      addLog('request','request_delete',`${CU.name} deleted request — ${r.req_no||id}`,{reqNo:r.req_no,company:r.company,amount:'₱'+(r.subtotal||0).toLocaleString()});
       if ((r.pre_approved || r.approved_done) && r.payment_account && r.subtotal) {
         await restoreBalance(r.payment_account, r.subtotal);
       }
@@ -1914,6 +1935,7 @@ async function saveEditRequest() {
       acnm:document.getElementById('editAcnm').value,
       tin:document.getElementById('editTin').value,
     });
+    addLog('request','request_edit',`${CU.name} edited request`,{reqId:id,company:co,payDate:pd,method:pm});
     ok.textContent='Saved successfully.'; ok.style.display='block';
     setTimeout(()=>{ closeEditReq(); renderHist(); }, 1200);
   } catch(e) {
@@ -1984,16 +2006,29 @@ async function admChangeRole(id,newLevel){
   const isAdmin = ['admin','director'].includes(newLevel);
   const patch = { is_admin: isAdmin, user_level: newLevel };
   if(isAdmin) patch.status = 'approved';
-  await sbPatch('users',{id},patch); renderAdm();
+  await sbPatch('users',{id},patch);
+  addLog('user','user_role_change',`${CU.name} changed user role to ${newLevel}`,{userId:id,newLevel});
+  renderAdm();
 }
-async function admOk(id){ await sbPatch('users',{id},{status:'approved'}); renderAdm(); }
-async function admNo(id){ if(!confirm('Are you sure you want to reject this account request?')) return; await sbPatch('users',{id},{status:'rejected'}); renderAdm(); }
+async function admOk(id){
+  await sbPatch('users',{id},{status:'approved'});
+  addLog('user','user_approve',`${CU.name} approved user account`,{userId:id});
+  renderAdm();
+}
+async function admNo(id){
+  if(!confirm('Are you sure you want to reject this account request?')) return;
+  await sbPatch('users',{id},{status:'rejected'});
+  addLog('user','user_reject',`${CU.name} rejected user account`,{userId:id});
+  renderAdm();
+}
 async function admDelete(id){
   const rows=await sbGet('users',`id=eq.${id}`);
   if(!rows.length) return;
   const u=mapUser(rows[0]);
   if(!confirm(`Delete account "${u.name}" (${u.email})? This cannot be undone.`)) return;
-  await sbDelete('users',{id}); renderAdm();
+  await sbDelete('users',{id});
+  addLog('user','user_delete',`${CU.name} deleted user — ${u.name} (${u.email})`,{name:u.name,email:u.email});
+  renderAdm();
 }
 
 async function admResetPw(id, name) {
@@ -2021,6 +2056,7 @@ async function doAdminResetPw() {
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     await sbPatch('users', {id}, {pw: nw});
+    addLog('user','user_pw_reset',`${CU.name} reset password for user`,{userId:id});
     ok.textContent = 'Password reset successfully.';
     ok.style.display = 'block';
     setTimeout(() => document.getElementById('resetPwModal').classList.remove('on'), 1800);
@@ -2034,6 +2070,95 @@ async function doAdminResetPw() {
 
 function closeResetPwModal() { document.getElementById('resetPwModal').classList.remove('on'); }
 function closeResetPwModalBg(e) { if(e.target===document.getElementById('resetPwModal')) closeResetPwModal(); }
+
+/* ═══════════════════════════════════
+   ACTIVITY LOG
+═══════════════════════════════════ */
+const LOG_ICONS = {
+  request_submit:    '📝', request_approve:  '✅', request_preapprove:'⚡',
+  request_cancel_preapprove:'↩️', request_deny:'✕', request_delete:  '🗑',
+  request_edit:      '✎',  balance_update:   '💰', cash_upload:      '📤',
+  cash_add:          '➕', cash_delete:      '🗑', user_approve:     '👤',
+  user_reject:       '👤', user_delete:      '🗑', user_role_change: '🔑',
+  user_pw_reset:     '🔐',
+};
+const LOG_COLORS = {
+  request:'var(--blue)', balance:'var(--ok)', cash:'var(--pu)', user:'var(--warn)'
+};
+
+async function addLog(type, action, summary, detail={}) {
+  try {
+    await sbPost('activity_log', {
+      id: 'log'+Date.now()+Math.random().toString(36).slice(2,6),
+      log_type: type,        // request | balance | cash | user
+      action,                // request_approve | balance_update | etc
+      summary,               // human-readable one-liner
+      detail: JSON.stringify(detail),
+      actor_id:   CU?.id   || null,
+      actor_name: CU?.name || null,
+      created_at: new Date().toISOString()
+    });
+  } catch(e) { console.warn('Log failed (non-critical):', e.message); }
+}
+
+async function renderLog() {
+  const list = document.getElementById('logList');
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const rows = await sbGet('activity_log', 'order=created_at.desc&limit=200');
+
+    // Populate user filter
+    const userSel = document.getElementById('logFUser');
+    const curU = userSel.value;
+    const userSet = new Set(rows.map(r=>r.actor_name).filter(Boolean));
+    userSel.innerHTML = '<option value="">All Users</option>';
+    userSet.forEach(n => userSel.innerHTML += `<option value="${n}" ${curU===n?'selected':''}>${n}</option>`);
+
+    const fType = document.getElementById('logFType').value;
+    const fUser = document.getElementById('logFUser').value;
+    const fQ    = (document.getElementById('logFQ').value||'').toLowerCase();
+
+    const filtered = rows.filter(r => {
+      if (fType && r.log_type !== fType) return false;
+      if (fUser && r.actor_name !== fUser) return false;
+      if (fQ && !(r.summary||'').toLowerCase().includes(fQ)) return false;
+      return true;
+    });
+
+    if (!filtered.length) { list.innerHTML = '<div class="empty" style="padding:3rem;text-align:center;color:var(--th)">No activity found.</div>'; return; }
+
+    list.innerHTML = filtered.map(r => {
+      const icon  = LOG_ICONS[r.action] || '•';
+      const color = LOG_COLORS[r.log_type] || 'var(--ts)';
+      const dt    = new Date(r.created_at);
+      const dtStr = dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+                  + ' ' + dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+      let detailHTML = '';
+      try {
+        const d = JSON.parse(r.detail||'{}');
+        const entries = Object.entries(d).filter(([k])=>!['id'].includes(k));
+        if (entries.length) {
+          detailHTML = `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">
+            ${entries.map(([k,v])=>`<span style="font-size:11px;background:var(--stripe);border:1px solid var(--bd);border-radius:6px;padding:2px 8px;color:var(--ts)"><strong>${k}:</strong> ${String(v).slice(0,60)}</span>`).join('')}
+          </div>`;
+        }
+      } catch(_) {}
+      return `<div style="display:flex;gap:12px;padding:12px 16px;background:#fff;border:1px solid var(--bd);border-radius:10px;margin-bottom:8px;align-items:flex-start">
+        <div style="width:32px;height:32px;border-radius:8px;background:${color}18;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;border:1px solid ${color}30">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">
+            <span style="font-size:13px;font-weight:600;color:var(--text)">${r.summary||''}</span>
+            <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:6px;background:${color}15;color:${color};border:1px solid ${color}30">${r.log_type}</span>
+          </div>
+          <div style="font-size:11px;color:var(--th)">${r.actor_name||'System'} · ${dtStr}</div>
+          ${detailHTML}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="empty">Failed to load. <small style="color:var(--err)">${e.message}</small></div>`;
+  }
+}
 
 /* ═══════════════════════════════════
    BALANCE PAGE
@@ -2293,6 +2418,7 @@ async function saveBalance() {
     } else {
       await sbPost('balance_data', {id:'bal'+Date.now(), data, updated_at: new Date().toISOString()});
     }
+    addLog('balance','balance_update',`${CU.name} updated balance data`,{construction:JSON.parse(data).construction});
 
     closeEditBal();
     renderBal();
@@ -2440,7 +2566,14 @@ function updateCashSummary(filtered, fY, fM) {
 
 async function deleteCashRow(id) {
   if (!confirm('Delete this row?')) return;
-  await sbDelete('cash_expenses', {id});
+  try {
+    const rows = await sbGet('cash_expenses', `id=eq.${id}`);
+    await sbDelete('cash_expenses', {id});
+    if (rows.length) {
+      const r = rows[0];
+      addLog('cash','cash_delete',`${CU.name} deleted cash entry — ${r.detail||''}`,{date:r.expense_date,detail:r.detail,jins:r.jins,allan:r.allan,rhizel:r.rhizel});
+    }
+  } catch(e) { alert('Error: '+(e.message||e)); }
   renderCash();
 }
 
@@ -2491,17 +2624,13 @@ async function submitAddCash() {
   try {
     await sbPost('cash_expenses', {
       id: 'ce'+Date.now()+Math.random().toString(36).slice(2,7),
-      expense_date: date,
-      detail,
+      expense_date: date, detail,
       unit_price: parseFloat(document.getElementById('acUnitPrice').value)||null,
       pcs:        parseFloat(document.getElementById('acPcs').value)||null,
-      jins:  jins||null,
-      allan: allan||null,
-      rhizel:rhizel||null,
-      receipt: rcpt,
-      uploaded_by: CU.id,
-      source_file: 'manual'
+      jins:  jins||null, allan: allan||null, rhizel:rhizel||null,
+      receipt: rcpt, uploaded_by: CU.id, source_file: 'manual'
     });
+    addLog('cash','cash_add',`${CU.name} manually added cash entry — ${detail}`,{date,detail,jins,allan,rhizel,receipt:rcpt});
     closeAddCash();
     renderCash();
   } catch(e) {
