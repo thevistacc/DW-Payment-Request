@@ -14,7 +14,13 @@
 <link rel="icon" type="image/png" sizes="192x192" href="https://placehold.co/192x192/1a5fa8/ffffff?text=DW">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+.cash-who{display:inline-flex;align-items:center;font-size:11px;font-weight:700;border-radius:6px;padding:2px 7px;margin:1px}
+.cash-who.jins{background:#eff6ff;color:#1e40af;border:1px solid #93c5fd}
+.cash-who.allan{background:#f0fdf4;color:#166534;border:1px solid #86efac}
+.cash-who.rhizel{background:#fdf4ff;color:#7e22ce;border:1px solid #d8b4fe}
+</style>
 <script>
   // Register Service Worker
   if ('serviceWorker' in navigator) {
@@ -438,6 +444,7 @@ table.adt tbody tr:hover{background:var(--stripe)}
         <button class="tb on" id="tbForm"  onclick="goTab('form')">New Request</button>
         <button class="tb"    id="tbHist"  onclick="goTab('hist')">My Requests</button>
         <button class="tb"    id="tbAdmin" onclick="goTab('admin')" style="display:none">User Management</button>
+        <button class="tb"    id="tbCash"  onclick="goTab('cash')"  style="display:none">Cash Payment</button>
       </div>
     </div>
     <div class="tr">
@@ -591,6 +598,76 @@ table.adt tbody tr:hover{background:var(--stripe)}
         <input class="hf-search" type="text" id="hfQ" placeholder="Search by request no. or company…" oninput="renderHist()" />
       </div>
       <div id="histList"></div>
+    </div>
+
+    <!-- CASH PAYMENT TAB -->
+    <div id="tabCash" style="display:none">
+      <div class="ph">Cash Payment</div>
+      <div class="ps">Upload daily expense Excel files and view monthly summaries</div>
+
+      <!-- UPLOAD CARD -->
+      <div class="card" style="margin-bottom:1.25rem">
+        <div class="ch"><div class="ci">📤</div><div class="ct">Upload Excel File</div></div>
+        <div class="cb">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <label for="cashFileInput" style="display:flex;align-items:center;gap:8px;padding:9px 18px;background:var(--blue-l);color:var(--blue);border:1.5px dashed #a8c8f0;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">
+              📂 Choose Excel File
+            </label>
+            <input type="file" id="cashFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleCashFile(event)" />
+            <span id="cashFileName" style="font-size:12px;color:var(--ts)">No file selected</span>
+          </div>
+          <div id="cashUploadMsg" style="margin-top:10px;font-size:12px;display:none"></div>
+        </div>
+      </div>
+
+      <!-- FILTER + SUMMARY -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
+        <select class="hf-select" id="cashYear" onchange="renderCash()">
+          <option value="">All Years</option>
+        </select>
+        <select class="hf-select" id="cashMonth" onchange="renderCash()">
+          <option value="">All Months</option>
+          <option value="01">January</option><option value="02">February</option>
+          <option value="03">March</option><option value="04">April</option>
+          <option value="05">May</option><option value="06">June</option>
+          <option value="07">July</option><option value="08">August</option>
+          <option value="09">September</option><option value="10">October</option>
+          <option value="11">November</option><option value="12">December</option>
+        </select>
+        <select class="hf-select" id="cashPerson" onchange="renderCash()">
+          <option value="">All Members</option>
+          <option value="JINS">Jins</option>
+          <option value="ALLAN">Allan</option>
+          <option value="RHIZEL">Rhizel</option>
+        </select>
+        <input class="hf-search" type="text" id="cashSearch" placeholder="Search description…" oninput="renderCash()" style="flex:1;min-width:140px" />
+      </div>
+
+      <!-- SUMMARY BAR -->
+      <div class="hist-summary" id="cashSummary" style="display:none;margin-bottom:1.25rem">
+        <div class="hist-summary-item">
+          <div class="hist-summary-label">Total Spent</div>
+          <div class="hist-summary-value" id="cashSumTotal">₱ 0.00</div>
+          <div class="hist-summary-sub" id="cashSumPeriod">All time</div>
+        </div>
+        <div class="hist-summary-item">
+          <div class="hist-summary-label">Jins</div>
+          <div class="hist-summary-value" id="cashSumJins">₱ 0.00</div>
+          <div class="hist-summary-sub">expenses</div>
+        </div>
+        <div class="hist-summary-item">
+          <div class="hist-summary-label">Allan</div>
+          <div class="hist-summary-value" id="cashSumAllan">₱ 0.00</div>
+          <div class="hist-summary-sub">expenses</div>
+        </div>
+        <div class="hist-summary-item">
+          <div class="hist-summary-label">Rhizel</div>
+          <div class="hist-summary-value" id="cashSumRhizel">₱ 0.00</div>
+          <div class="hist-summary-sub">expenses</div>
+        </div>
+      </div>
+
+      <div id="cashList"></div>
     </div>
 
     <!-- ADMIN TAB -->
@@ -978,6 +1055,7 @@ async function launchApp() {
   document.getElementById('uName').textContent = CU.name;
   document.getElementById('aBadge').style.display = CU.isAdmin ? '' : 'none';
   document.getElementById('tbAdmin').style.display = CU.isAdmin ? '' : 'none';
+  document.getElementById('tbCash').style.display  = CU.isAdmin ? '' : 'none';
   document.getElementById('tbHist').textContent = CU.isAdmin ? 'All Requests' : 'My Requests';
   // Request push notification permission after login
   setTimeout(() => {
@@ -995,11 +1073,11 @@ async function launchApp() {
    TABS
 ═══════════════════════════════════ */
 async function goTab(t) {
-  ['Form','Hist','Admin'].forEach(n => {
+  ['Form','Hist','Admin','Cash'].forEach(n => {
     document.getElementById('tb'+n)?.classList.remove('on');
     const el = document.getElementById('tab'+n); if(el) el.style.display='none';
   });
-  const map = {form:'Form',hist:'Hist',admin:'Admin'};
+  const map = {form:'Form',hist:'Hist',admin:'Admin',cash:'Cash'};
   document.getElementById('tb'+map[t])?.classList.add('on');
   document.getElementById('tab'+map[t]).style.display = '';
   if (t==='form') {
@@ -1009,6 +1087,7 @@ async function goTab(t) {
   }
   if (t==='hist') { selectedMonth=''; document.getElementById('ymYear').value=''; document.getElementById('ymMonth').value=''; renderHist(); }
   if (t==='admin') renderAdm();
+  if (t==='cash') renderCash();
 }
 
 /* ═══════════════════════════════════
@@ -1580,6 +1659,209 @@ async function doAdminResetPw() {
 
 function closeResetPwModal() { document.getElementById('resetPwModal').classList.remove('on'); }
 function closeResetPwModalBg(e) { if(e.target===document.getElementById('resetPwModal')) closeResetPwModal(); }
+
+/* ═══════════════════════════════════
+   CASH PAYMENT
+═══════════════════════════════════ */
+let cashData = []; // all loaded rows
+
+async function renderCash() {
+  const list = document.getElementById('cashList');
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    let params = 'order=expense_date.desc';
+    const rows = await sbGet('cash_expenses', params);
+    cashData = rows;
+
+    // Populate year dropdown
+    const yearSet = new Set(rows.map(r => (r.expense_date||'').slice(0,4)).filter(Boolean));
+    const years = Array.from(yearSet).sort().reverse();
+    const yearSel = document.getElementById('cashYear');
+    const curY = yearSel.value;
+    yearSel.innerHTML = '<option value="">All Years</option>';
+    years.forEach(y => yearSel.innerHTML += `<option value="${y}" ${curY===y?'selected':''}>${y}</option>`);
+
+    // Filters
+    const fY = document.getElementById('cashYear').value;
+    const fM = document.getElementById('cashMonth').value;
+    const fP = document.getElementById('cashPerson').value;
+    const fQ = (document.getElementById('cashSearch').value||'').toLowerCase();
+
+    const filtered = rows.filter(r => {
+      const d = r.expense_date||'';
+      if (fY && !d.startsWith(fY)) return false;
+      if (fM && d.slice(5,7) !== fM) return false;
+      if (fP && !r[fP.toLowerCase()]) return false;
+      if (fQ && !(r.detail||'').toLowerCase().includes(fQ)) return false;
+      return true;
+    });
+
+    // Summary
+    updateCashSummary(filtered, fY, fM);
+
+    if (!filtered.length) { list.innerHTML = '<div class="empty" style="padding:3rem;text-align:center;color:var(--th)">No records found.</div>'; return; }
+
+    // Group by date
+    const byDate = {};
+    filtered.forEach(r => {
+      const d = r.expense_date;
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(r);
+    });
+
+    const monthNames = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    list.innerHTML = Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).map(([date, items]) => {
+      const [y,m,d] = date.split('-');
+      const dayTotal = items.reduce((s,r) => s+(r.jins||0)+(r.allan||0)+(r.rhizel||0), 0);
+      const rows = items.map(r => {
+        const amt = (r.jins||0)+(r.allan||0)+(r.rhizel||0);
+        const who = [r.jins&&`<span class="cash-who jins">J ₱${r.jins.toLocaleString()}</span>`,
+                     r.allan&&`<span class="cash-who allan">A ₱${r.allan.toLocaleString()}</span>`,
+                     r.rhizel&&`<span class="cash-who rhizel">R ₱${r.rhizel.toLocaleString()}</span>`].filter(Boolean).join('');
+        const rcpt = r.receipt==='O'?'<span style="color:var(--ok);font-size:11px">✓ Receipt</span>':r.receipt==='X'?'<span style="color:var(--err);font-size:11px">✕ No receipt</span>':'';
+        return `<tr>
+          <td style="font-size:13px;color:var(--text)">${r.detail||''}</td>
+          <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--ts)">${r.unit_price?'₱'+Number(r.unit_price).toLocaleString():''}</td>
+          <td style="text-align:center;font-size:12px;color:var(--ts)">${r.pcs||''}</td>
+          <td style="text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--text)">${amt?'₱'+amt.toLocaleString():''}</td>
+          <td>${who}</td>
+          <td>${rcpt}</td>
+          <td><button onclick="deleteCashRow('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--th);font-size:13px;padding:2px 6px;border-radius:4px" onmouseover="this.style.color='var(--err)'" onmouseout="this.style.color='var(--th)'">✕</button></td>
+        </tr>`;
+      }).join('');
+      return `<div class="card" style="margin-bottom:10px">
+        <div class="ch" style="justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="ci">📅</div>
+            <div class="ct">${monthNames[parseInt(m)]} ${parseInt(d)}, ${y}</div>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--blue);font-family:'DM Mono',monospace">₱ ${dayTotal.toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
+        </div>
+        <div class="cb" style="padding:0;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="background:var(--stripe)">
+              <th style="padding:8px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--bd)">Description</th>
+              <th style="padding:8px 10px;text-align:right;font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--bd)">Unit Price</th>
+              <th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--bd)">Qty</th>
+              <th style="padding:8px 10px;text-align:right;font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--bd)">Amount</th>
+              <th style="padding:8px 10px;font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--bd)">Paid by</th>
+              <th style="padding:8px 10px;font-size:11px;font-weight:600;color:var(--ts);letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--bd)">Receipt</th>
+              <th style="border-bottom:1px solid var(--bd);width:32px"></th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="empty">Failed to load. <br><small style="color:var(--err)">${e.message}</small></div>`;
+  }
+}
+
+function updateCashSummary(filtered, fY, fM) {
+  const bar = document.getElementById('cashSummary');
+  if (!filtered.length) { bar.style.display='none'; return; }
+  bar.style.display = 'flex';
+  const totalJ = filtered.reduce((s,r)=>s+(r.jins||0),0);
+  const totalA = filtered.reduce((s,r)=>s+(r.allan||0),0);
+  const totalR = filtered.reduce((s,r)=>s+(r.rhizel||0),0);
+  const total = totalJ+totalA+totalR;
+  const fmt = v => '₱ '+v.toLocaleString('en-PH',{minimumFractionDigits:2});
+  document.getElementById('cashSumTotal').textContent = fmt(total);
+  document.getElementById('cashSumJins').textContent = fmt(totalJ);
+  document.getElementById('cashSumAllan').textContent = fmt(totalA);
+  document.getElementById('cashSumRhizel').textContent = fmt(totalR);
+  const monthNames=['','January','February','March','April','May','June','July','August','September','October','November','December'];
+  if (fY && fM) document.getElementById('cashSumPeriod').textContent = `${monthNames[parseInt(fM)]} ${fY}`;
+  else if (fY) document.getElementById('cashSumPeriod').textContent = fY;
+  else document.getElementById('cashSumPeriod').textContent = 'All time';
+}
+
+async function deleteCashRow(id) {
+  if (!confirm('Delete this row?')) return;
+  await sbDelete('cash_expenses', {id});
+  renderCash();
+}
+
+async function handleCashFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  document.getElementById('cashFileName').textContent = file.name;
+  const msg = document.getElementById('cashUploadMsg');
+  msg.style.display = 'block';
+  msg.style.color = 'var(--ts)';
+  msg.textContent = 'Reading file…';
+
+  try {
+    const data = await file.arrayBuffer();
+    // Use SheetJS (xlsx) loaded from CDN
+    if (!window.XLSX) throw new Error('SheetJS not loaded');
+    const wb = XLSX.read(data, {type:'array', cellDates:true});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {raw:false, defval:null});
+
+    const toInsert = [];
+    const skipDetails = ['sub total','subtotal','add money','adjustment'];
+
+    rows.forEach(r => {
+      const detail = (r['DETAIL']||r['detail']||'').toString().trim();
+      if (!detail || skipDetails.some(s => detail.toLowerCase().includes(s))) return;
+
+      // Parse date
+      let dateStr = null;
+      const rawDate = r['DATE']||r['date'];
+      if (rawDate) {
+        try {
+          const d = new Date(rawDate);
+          if (!isNaN(d)) dateStr = d.toISOString().split('T')[0];
+        } catch(_) {}
+      }
+      if (!dateStr) return;
+
+      const jins   = parseFloat(r['JINS']||r['jins']||0)||0;
+      const allan  = parseFloat(r['ALLAN']||r['allan']||0)||0;
+      const rhizel = parseFloat(r['RHIZEL']||r['rhizel']||0)||0;
+      if (jins===0 && allan===0 && rhizel===0) return;
+
+      const unitPrice = parseFloat(r['unit price']||r['unit_price']||0)||null;
+      const pcs = parseFloat(r['pcs']||0)||null;
+      const receipt = (r['receipt']||'').toString().trim()||null;
+
+      toInsert.push({
+        id: 'ce'+Date.now()+Math.random().toString(36).slice(2,7),
+        expense_date: dateStr,
+        detail,
+        unit_price: unitPrice,
+        pcs,
+        jins: jins||null,
+        allan: allan||null,
+        rhizel: rhizel||null,
+        receipt,
+        uploaded_by: CU.id,
+        source_file: file.name
+      });
+    });
+
+    if (!toInsert.length) { msg.style.color='var(--warn)'; msg.textContent='No valid expense rows found in this file.'; return; }
+
+    msg.textContent = `Uploading ${toInsert.length} rows…`;
+
+    // Insert in batches of 50
+    let inserted = 0;
+    for (let i=0; i<toInsert.length; i+=50) {
+      await sbPost('cash_expenses', toInsert.slice(i,i+50));
+      inserted += Math.min(50, toInsert.length-i);
+    }
+
+    msg.style.color = 'var(--ok)';
+    msg.textContent = `✓ ${inserted} rows uploaded successfully from ${file.name}`;
+    event.target.value = '';
+    renderCash();
+  } catch(e) {
+    msg.style.color = 'var(--err)';
+    msg.textContent = 'Error: ' + (e.message||e);
+  }
+}
 
 /* ═══════════════════════════════════
    PASSWORD MODAL
