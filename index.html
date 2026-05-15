@@ -1542,7 +1542,9 @@ async function renderHist() {
           denyBtn=`<button class="happ-btn happ-deny" onclick="histDeny('${r.id}')">✕ Deny</button>`;
           // Admin can pre-approve before director
           if(canPreApprove(CU) && !r.preApproved)
-            preApproveBtn=`<button class="happ-btn" style="background:var(--warn-bg);color:var(--warn);border:1.5px solid var(--warn-bd)" onclick="preApproveRequest('${r.id}')">⚡ Pre-Approve</button>`;
+            preApproveBtn=`<button class="happ-btn" style="background:var(--warn-bg);color:var(--warn);border:1.5px solid var(--warn-bd)" onclick="openApproveModal('${r.id}','preapprove',${r.subtotal})">⚡ Pre-Approve</button>`;
+          if(canPreApprove(CU) && r.preApproved)
+            preApproveBtn=`<button class="happ-btn" style="background:var(--err-bg);color:var(--err);border:1.5px solid var(--err-bd)" onclick="cancelPreApprove('${r.id}')">✕ Cancel Pre-Approve</button>`;
         } else if(st==='denied'){
           statusLine=`<span style="color:var(--err);font-weight:600;font-size:12px">✕ Denied</span>`;
         } else {
@@ -1659,11 +1661,57 @@ function toggleHist(bodyId,chevId){
   const open=b.classList.toggle('open'); c.classList.toggle('open',open);
 }
 
+async function cancelPreApprove(id) {
+  if (!confirm('Cancel pre-approval? The deducted balance will be restored.')) return;
+  try {
+    const reqRows = await sbGet('requests', `id=eq.${id}`);
+    if (reqRows.length) {
+      const r = reqRows[0];
+      await sbPatch('requests', {id}, {pre_approved:false, pre_approved_by:null, payment_account:null});
+      if (r.payment_account && r.subtotal) {
+        await restoreBalance(r.payment_account, r.subtotal);
+      }
+    }
+  } catch(e) { alert('Error: '+(e.message||e)); }
+  renderHist();
+}
+
 async function preApproveRequest(id) {
   if (!canPreApprove(CU)) return;
-  if (!confirm('Pre-approve this request? Director will still need to give final approval.')) return;
-  await sbPatch('requests',{id},{pre_approved:true, pre_approved_by:CU.id});
-  renderHist();
+  if (!confirm('Pre-approve this request? Balance will be deducted now.')) return;
+  // Open approve modal — pre-approve also needs bank selection
+  const reqRows = await sbGet('requests', `id=eq.${id}`);
+  if (!reqRows.length) return;
+  const r = reqRows[0];
+  // Store pre-approve flag in modal
+  document.getElementById('approveType').value = 'preapprove';
+  await openApproveModal(id, 'preapprove', r.subtotal);
+}
+
+/* ── Shared balance helpers ── */
+async function deductBalance(bankVal, amount) {
+  const rows = await sbGet('balance_data','order=updated_at.desc&limit=1');
+  if (!rows.length) return;
+  const bd = JSON.parse(rows[0].data);
+  const [cat, idx] = bankVal.split('_');
+  const i = parseInt(idx);
+  if      (cat==='bankph'  && bd.bankPH[i])  bd.bankPH[i].balance  = (bd.bankPH[i].balance||0) - amount;
+  else if (cat==='bankusd' && bd.bankUSD[i]) bd.bankUSD[i].balance = (bd.bankUSD[i].balance||0) - amount;
+  else if (cat==='cash'    && bd.cash[i])    bd.cash[i].disbursed  = (bd.cash[i].disbursed||0) + amount;
+  await sbPatch('balance_data',{id:rows[0].id},{data:JSON.stringify(bd),updated_at:new Date().toISOString()});
+}
+
+async function restoreBalance(bankVal, amount) {
+  if (!bankVal || !amount) return;
+  const rows = await sbGet('balance_data','order=updated_at.desc&limit=1');
+  if (!rows.length) return;
+  const bd = JSON.parse(rows[0].data);
+  const [cat, idx] = bankVal.split('_');
+  const i = parseInt(idx);
+  if      (cat==='bankph'  && bd.bankPH[i])  bd.bankPH[i].balance  = (bd.bankPH[i].balance||0) + amount;
+  else if (cat==='bankusd' && bd.bankUSD[i]) bd.bankUSD[i].balance = (bd.bankUSD[i].balance||0) + amount;
+  else if (cat==='cash'    && bd.cash[i])    bd.cash[i].disbursed  = Math.max(0,(bd.cash[i].disbursed||0) - amount);
+  await sbPatch('balance_data',{id:rows[0].id},{data:JSON.stringify(bd),updated_at:new Date().toISOString()});
 }
 
 async function histCkApprove(id){
@@ -1755,33 +1803,29 @@ async function submitApprove() {
 
   btn.disabled = true; btn.textContent = 'Approving…';
   try {
-    // 1. Update request status
+    const reqRows = await sbGet('requests',`id=eq.${reqId}`);
+    const amount = reqRows.length ? (reqRows[0].subtotal||0) : 0;
+
     if (type === 'check') {
-      await sbPatch('requests',{id:reqId},{checked_done:true});
+      await sbPatch('requests',{id:reqId},{checked_done:true, payment_account:bankVal});
+    } else if (type === 'preapprove') {
+      // Pre-approve: deduct balance now, director still needs to final approve
+      await sbPatch('requests',{id:reqId},{pre_approved:true, pre_approved_by:CU.id, payment_account:bankVal});
     } else {
-      await sbPatch('requests',{id:reqId},{approved_done:true, payment_account: bankVal});
-    }
-
-    // 2. Deduct from balance
-    const rows = await sbGet('balance_data','order=updated_at.desc&limit=1');
-    if (rows.length) {
-      const bd = JSON.parse(rows[0].data);
-      const reqRows = await sbGet('requests',`id=eq.${reqId}`);
-      const amount = reqRows.length ? (reqRows[0].subtotal||0) : 0;
-
-      const [cat, idx] = bankVal.split('_');
-      const i = parseInt(idx);
-      if (cat==='bankph' && bd.bankPH[i]) {
-        bd.bankPH[i].balance = (bd.bankPH[i].balance||0) - amount;
-      } else if (cat==='bankusd' && bd.bankUSD[i]) {
-        bd.bankUSD[i].balance = (bd.bankUSD[i].balance||0) - amount;
-      } else if (cat==='cash' && bd.cash[i]) {
-        bd.cash[i].disbursed = (bd.cash[i].disbursed||0) + amount;
+      // Final approve
+      // If already pre-approved (balance already deducted), skip deduct
+      const alreadyDeducted = reqRows.length && reqRows[0].pre_approved && reqRows[0].payment_account;
+      await sbPatch('requests',{id:reqId},{approved_done:true, payment_account:bankVal});
+      if (!alreadyDeducted) {
+        await deductBalance(bankVal, amount);
       }
-
-      await sbPatch('balance_data',{id:rows[0].id},{data:JSON.stringify(bd), updated_at:new Date().toISOString()});
+      closeApproveModal();
+      renderHist();
+      return;
     }
 
+    // Deduct for check and preapprove
+    await deductBalance(bankVal, amount);
     closeApproveModal();
     renderHist();
   } catch(e) {
@@ -1794,14 +1838,37 @@ async function submitApprove() {
 
 function closeApproveModal() { document.getElementById('approveModal').classList.remove('on'); }
 function closeApproveModalBg(e) { if(e.target===document.getElementById('approveModal')) closeApproveModal(); }
-async function histDeny(id){
-  if(!confirm('Are you sure you want to deny this request?')) return;
-  await sbPatch('requests',{id},{denied:true}); renderHist();
+async function histDeny(id) {
+  if (!confirm('Are you sure you want to deny this request?')) return;
+  try {
+    const reqRows = await sbGet('requests', `id=eq.${id}`);
+    if (reqRows.length) {
+      const r = reqRows[0];
+      await sbPatch('requests', {id}, {denied:true});
+      if ((r.pre_approved || r.approved_done) && r.payment_account && r.subtotal) {
+        await restoreBalance(r.payment_account, r.subtotal);
+      }
+    } else {
+      await sbPatch('requests', {id}, {denied:true});
+    }
+  } catch(e) { alert('Error: '+(e.message||e)); }
+  renderHist();
 }
 
 async function deleteRequest(id) {
-  if(!confirm('Delete this request? This cannot be undone.')) return;
-  await sbDelete('requests', {id});
+  if (!confirm('Delete this request? This cannot be undone.')) return;
+  try {
+    const reqRows = await sbGet('requests', `id=eq.${id}`);
+    if (reqRows.length) {
+      const r = reqRows[0];
+      await sbDelete('requests', {id});
+      if ((r.pre_approved || r.approved_done) && r.payment_account && r.subtotal) {
+        await restoreBalance(r.payment_account, r.subtotal);
+      }
+    } else {
+      await sbDelete('requests', {id});
+    }
+  } catch(e) { alert('Error: '+(e.message||e)); }
   renderHist();
 }
 
