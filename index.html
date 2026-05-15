@@ -13,13 +13,15 @@
 <link rel="apple-touch-icon" href="https://placehold.co/192x192/1a5fa8/ffffff?text=DW">
 <link rel="icon" type="image/png" sizes="192x192" href="https://placehold.co/192x192/1a5fa8/ffffff?text=DW">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 .cash-who{display:inline-flex;align-items:center;font-size:11px;font-weight:700;border-radius:6px;padding:2px 7px;margin:1px}
 .cash-who.jins{background:#eff6ff;color:#1e40af;border:1px solid #93c5fd}
 .cash-who.allan{background:#f0fdf4;color:#166534;border:1px solid #86efac}
 .cash-who.rhizel{background:#fdf4ff;color:#7e22ce;border:1px solid #d8b4fe}
+/* Cash payment number font — Inter with tabular nums for alignment */
+.cash-num{font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 </style>
 <script>
   // Register Service Worker
@@ -647,22 +649,22 @@ table.adt tbody tr:hover{background:var(--stripe)}
       <div class="hist-summary" id="cashSummary" style="display:none;margin-bottom:1.25rem">
         <div class="hist-summary-item">
           <div class="hist-summary-label">Total Spent</div>
-          <div class="hist-summary-value" id="cashSumTotal">₱ 0.00</div>
+          <div class="hist-summary-value" id="cashSumTotal" style="font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums">₱ 0.00</div>
           <div class="hist-summary-sub" id="cashSumPeriod">All time</div>
         </div>
         <div class="hist-summary-item">
           <div class="hist-summary-label">Jins</div>
-          <div class="hist-summary-value" id="cashSumJins">₱ 0.00</div>
+          <div class="hist-summary-value" id="cashSumJins" style="font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums">₱ 0.00</div>
           <div class="hist-summary-sub">expenses</div>
         </div>
         <div class="hist-summary-item">
           <div class="hist-summary-label">Allan</div>
-          <div class="hist-summary-value" id="cashSumAllan">₱ 0.00</div>
+          <div class="hist-summary-value" id="cashSumAllan" style="font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums">₱ 0.00</div>
           <div class="hist-summary-sub">expenses</div>
         </div>
         <div class="hist-summary-item">
           <div class="hist-summary-label">Rhizel</div>
-          <div class="hist-summary-value" id="cashSumRhizel">₱ 0.00</div>
+          <div class="hist-summary-value" id="cashSumRhizel" style="font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums">₱ 0.00</div>
           <div class="hist-summary-sub">expenses</div>
         </div>
       </div>
@@ -1723,10 +1725,10 @@ async function renderCash() {
         const total = (r.jins||0)+(r.allan||0)+(r.rhizel||0);
         return `<tr style="border-bottom:1px solid var(--bd)">
           <td style="padding:8px 14px;font-size:13px;color:var(--text);word-break:break-word">${r.detail||''}</td>
-          <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:#1e40af;font-weight:${r.jins?'600':'400'}">${fmtAmt(r.jins)}</td>
-          <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:#166534;font-weight:${r.allan?'600':'400'}">${fmtAmt(r.allan)}</td>
-          <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:13px;color:#7e22ce;font-weight:${r.rhizel?'600':'400'}">${fmtAmt(r.rhizel)}</td>
-          <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--text)">${fmtAmt(total)}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:13px;color:#1e40af;font-weight:${r.jins?'600':'400'}">${fmtAmt(r.jins)}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:13px;color:#166534;font-weight:${r.allan?'600':'400'}">${fmtAmt(r.allan)}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:13px;color:#7e22ce;font-weight:${r.rhizel?'600':'400'}">${fmtAmt(r.rhizel)}</td>
+          <td style="padding:8px 10px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--text)">${fmtAmt(total)}</td>
           <td style="padding:8px 10px;text-align:center">${rcpt}</td>
           <td style="padding:8px 6px;width:28px;text-align:center"><button onclick="deleteCashRow('${r.id}')" style="background:none;border:none;cursor:pointer;color:var(--bd);font-size:12px;padding:2px 4px;border-radius:4px" onmouseover="this.style.color='var(--err)'" onmouseout="this.style.color='var(--bd)'">✕</button></td>
         </tr>`;
@@ -1761,10 +1763,10 @@ async function renderCash() {
             <tbody>${rows}</tbody>
             <tfoot><tr style="background:var(--stripe);border-top:1.5px solid var(--bd)">
               <td style="padding:8px 14px;font-size:12px;font-weight:600;color:var(--ts);text-transform:uppercase;letter-spacing:.04em">Day Total</td>
-              <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:#1e40af">${fmtT(tJ)}</td>
-              <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:#166534">${fmtT(tA)}</td>
-              <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:#7e22ce">${fmtT(tR)}</td>
-              <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--blue)">₱${tT.toLocaleString('en-PH',{minimumFractionDigits:0})}</td>
+              <td style="padding:8px 10px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:12px;font-weight:700;color:#1e40af">${fmtT(tJ)}</td>
+              <td style="padding:8px 10px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:12px;font-weight:700;color:#166534">${fmtT(tA)}</td>
+              <td style="padding:8px 10px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:12px;font-weight:700;color:#7e22ce">${fmtT(tR)}</td>
+              <td style="padding:8px 10px;text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:var(--blue)">₱${tT.toLocaleString('en-PH',{minimumFractionDigits:0})}</td>
               <td colspan="2"></td>
             </tr></tfoot>
           </table>
