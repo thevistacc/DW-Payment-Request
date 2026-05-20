@@ -24,8 +24,8 @@
 .cash-num{font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 </style>
 <script>
-  // Register Service Worker
-  if ('serviceWorker' in navigator) {
+  // Register Service Worker (only on actual deployment, not preview)
+  if ('serviceWorker' in navigator && location.hostname !== 'www.claudeusercontent.com') {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW registration failed:', err));
     });
@@ -139,7 +139,7 @@ table.et tbody tr:nth-child(even){background:var(--stripe)}
 table.et td{padding:5px 4px}
 table.et td input{width:100%;border:1.5px solid transparent;border-radius:6px;padding:6px 8px;font-size:13px;font-family:'DM Sans',sans-serif;background:transparent;color:var(--text);transition:border-color .12s,background .12s}
 table.et td input:focus{outline:none;border-color:var(--bdf);background:#fff}
-table.et td input.r{text-align:right;font-family:'DM Mono',monospace}
+table.et td input.r{text-align:right;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums}
 table.et td input[readonly]{color:var(--ts);background:transparent;cursor:default}
 table.et td input[readonly]:focus{border-color:transparent}
 .cn{width:36px}.cd{min-width:180px}.cq{width:70px}.cu{width:110px}.ca{width:110px}.cv{width:100px}.ctot{width:115px}.cdl{width:36px}
@@ -487,7 +487,7 @@ table.adt tbody tr:hover{background:var(--stripe)}
               <table class="et">
                 <thead><tr>
                   <th class="cn">#</th><th class="cd">Description</th>
-                  <th class="cq r">Qty</th><th class="cu r">Unit Cost</th>
+                  <th class="cq r">Qty <span style="font-weight:400;opacity:.6">(opt)</span></th><th class="cu r">Unit Cost <span style="font-weight:400;opacity:.6">(opt)</span></th>
                   <th class="ca r">Amount</th><th class="cv r">VAT (12%)</th>
                   <th class="ctot r">Total Amount</th><th class="cdl"></th>
                 </tr></thead>
@@ -506,7 +506,7 @@ table.adt tbody tr:hover{background:var(--stripe)}
           <div class="ch"><div class="ci">🏢</div><div class="ct">Payee Information</div></div>
           <div class="cb">
             <div class="fg3">
-              <div class="ff" style="grid-column:span 2"><label>Company Name <span class="req">*</span></label><input type="text" id="coName" placeholder="Enter company name" /></div>
+              <div class="ff" style="grid-column:span 2"><label>Company Name</label><input type="text" id="coName" placeholder="Enter company name (optional)" /></div>
               <div class="ff"><label>TIN No.</label><input type="text" id="tin" placeholder="TIN number" /></div>
               <div class="ff"><label>Bank Name</label><input type="text" id="bnk" placeholder="Bank name" /></div>
               <div class="ff"><label>Account Number</label><input type="text" id="acno" placeholder="Account number" /></div>
@@ -1336,33 +1336,65 @@ function addRow() {
   tr.innerHTML = `
     <td class="cn" style="padding-left:12px;color:var(--th);font-size:12px;font-family:'DM Mono',monospace">${String(r).padStart(2,'0')}</td>
     <td class="cd"><input type="text" placeholder="Item description"/></td>
-    <td class="cq r"><input type="number" class="r" placeholder="0" min="0" step="any" oninput="calcRow(${r})"/></td>
-    <td class="cu r"><input type="number" class="r" placeholder="0.00" min="0" step="any" oninput="calcRow(${r})"/></td>
-    <td class="ca r"><input type="number" class="r" id="amt${r}" placeholder="0.00" readonly/></td>
-    <td class="cv r"><input type="number" class="r" id="vat${r}" placeholder="0.00" oninput="manualVat(${r})"/></td>
-    <td class="ctot r"><input type="number" class="r" id="tot${r}" placeholder="0.00" oninput="updateSt()"/></td>
+    <td class="cq r"><input type="text" inputmode="decimal" class="r num-input" placeholder="(opt)" oninput="calcRow(${r})" onblur="fmtInput(this)"/></td>
+    <td class="cu r"><input type="text" inputmode="decimal" class="r num-input" placeholder="(opt)" oninput="calcRow(${r})" onblur="fmtInput(this)"/></td>
+    <td class="ca r"><input type="text" inputmode="decimal" class="r num-input" id="amt${r}" placeholder="0.00" oninput="onAmtInput(${r})" onblur="fmtInput(this)"/></td>
+    <td class="cv r"><input type="text" inputmode="decimal" class="r num-input" id="vat${r}" placeholder="0.00" oninput="manualVat(${r})" onblur="fmtInput(this)"/></td>
+    <td class="ctot r"><input type="text" inputmode="decimal" class="r num-input" id="tot${r}" placeholder="0.00" readonly style="background:var(--stripe);cursor:default"/></td>
     <td class="cdl"><button class="delbtn" onclick="delRow(${r})">✕</button></td>`;
   document.getElementById('eBody').appendChild(tr);
 }
 function delRow(r) { const el=document.getElementById('row'+r); if(el) el.remove(); updateSt(); }
+
+/* ── number helpers ── */
+function parseNum(v) { return parseFloat((v||'').replace(/,/g,''))||0; }
+function fmtNum(n) {
+  if(!n && n!==0) return '';
+  return n.toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtInput(el) {
+  const v = parseNum(el.value);
+  if(v) el.value = fmtNum(v);
+}
+function setFmt(id, val) {
+  const el = document.getElementById(id);
+  if(el) el.value = val ? fmtNum(val) : '';
+}
+
 function calcRow(r) {
   const row=document.getElementById('row'+r); if(!row) return;
-  const n=row.querySelectorAll('input[type=number]');
-  const q=parseFloat(n[0].value)||0, u=parseFloat(n[1].value)||0;
-  const a=q*u, v=a*0.12, t=a+v;
-  document.getElementById('amt'+r).value=a?a.toFixed(2):'';
-  document.getElementById('vat'+r).value=v?v.toFixed(2):'';
-  document.getElementById('tot'+r).value=t?t.toFixed(2):'';
+  const n=row.querySelectorAll('input.num-input');
+  const q=parseNum(n[0].value), u=parseNum(n[1].value);
+  // Only auto-calculate if both qty and unit cost are provided
+  if(q && u) {
+    const a=q*u, v=a*0.12, t=a+v;
+    setFmt('amt'+r, a);
+    setFmt('vat'+r, v);
+    setFmt('tot'+r, t);
+  }
+  updateSt();
+}
+function onAmtInput(r) {
+  // Auto-apply 12% VAT when amount is typed directly; VAT can be overridden via manualVat
+  const raw = (document.getElementById('amt'+r).value||'').replace(/,/g,'');
+  const a = parseFloat(raw)||0;
+  const v = a*0.12;
+  setFmt('vat'+r, a?v:0);
+  setFmt('tot'+r, a?(a+v):0);
+  if(!a) { document.getElementById('vat'+r).value=''; document.getElementById('tot'+r).value=''; }
   updateSt();
 }
 function manualVat(r) {
-  const a=parseFloat(document.getElementById('amt'+r).value)||0;
-  const v=parseFloat(document.getElementById('vat'+r).value)||0;
-  document.getElementById('tot'+r).value=(a+v).toFixed(2);
+  // VAT is freely editable — just recalc total from amt + typed vat
+  const a=parseNum(document.getElementById('amt'+r).value);
+  const v=parseNum(document.getElementById('vat'+r).value);
+  setFmt('tot'+r, (a||v)?(a+v):0);
+  if(!a&&!v) document.getElementById('tot'+r).value='';
   updateSt();
 }
 function updateSt() {
-  let s=0; document.querySelectorAll('[id^="tot"]').forEach(el=>{ s+=parseFloat(el.value)||0; });
+  let s=0;
+  document.querySelectorAll('[id^="tot"]').forEach(el=>{ s+=parseNum(el.value); });
   document.getElementById('stVal').textContent='₱ '+s.toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
@@ -1406,17 +1438,17 @@ async function submitForm() {
   const co=document.getElementById('coName').value.trim();
   const pu=document.getElementById('purp').value.trim();
   const pm=document.getElementById('payMethod').value;
-  if(!rd||!pd||!co||!pu){ alert('Please fill in all required fields:\n• Date\n• Estimate Payment Date\n• Purpose of Expense\n• Company Name'); return; }
+  if(!rd||!pd||!pu){ alert('Please fill in all required fields:\n• Date\n• Estimate Payment Date\n• Purpose of Expense'); return; }
   const items=[];
   let sub=0;
   document.querySelectorAll('#eBody tr').forEach(tr=>{
     const desc=tr.querySelector('td:nth-child(2) input')?.value.trim();
-    const qty=tr.querySelector('td:nth-child(3) input')?.value;
-    const uc=tr.querySelector('td:nth-child(4) input')?.value;
-    const amt=tr.querySelector('td:nth-child(5) input')?.value;
-    const vat=tr.querySelector('td:nth-child(6) input')?.value;
-    const tot=tr.querySelector('td:nth-child(7) input')?.value;
-    if(desc||qty||uc){ items.push({desc:desc||'',qty:qty||'',uc:uc||'',amt:amt||'',vat:vat||'',tot:tot||''}); sub+=parseFloat(tot)||0; }
+    const qty=(tr.querySelector('td:nth-child(3) input')?.value||'').replace(/,/g,'');
+    const uc=(tr.querySelector('td:nth-child(4) input')?.value||'').replace(/,/g,'');
+    const amt=(tr.querySelector('td:nth-child(5) input')?.value||'').replace(/,/g,'');
+    const vat=(tr.querySelector('td:nth-child(6) input')?.value||'').replace(/,/g,'');
+    const tot=(tr.querySelector('td:nth-child(7) input')?.value||'').replace(/,/g,'');
+    if(desc||tot){ items.push({desc:desc||'',qty:qty||'',uc:uc||'',amt:amt||'',vat:vat||'',tot:tot||''}); sub+=parseFloat(tot)||0; }
   });
   const rn=document.getElementById('reqNo').value;
   const reqId='req'+Date.now();
